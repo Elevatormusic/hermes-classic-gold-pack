@@ -41,7 +41,40 @@ animations:
 - For the **advanced** tier only: a Hermes desktop **dev environment**
   (`apps/desktop` with its dependencies installed) and Git.
 
-## Core install (theme + pets)
+## Install with an AI agent (recommended)
+
+Copy the prompt below and paste it into an **agentic** coding assistant that can
+run shell commands and edit files — **Claude Code, Cursor, or Codex CLI**. It
+fetches the repo and does everything itself; you don't open or paste any file.
+
+```text
+You have shell + file access. Install the Hermes "Classic Gold" pack on my machine.
+
+1. Clone https://github.com/Elevatormusic/hermes-classic-gold-pack and cd into it.
+2. Core (theme + pets): run  node install.mjs --activate noir-neko-ascii-fine
+   Then tell me the one manual theme step: open Hermes Desktop -> Ctrl/Cmd+Shift+I
+   -> Console tab -> paste the contents of theme/install-theme.js -> Enter.
+3. Ask me whether I also want the custom status bar and/or the caduceus extras.
+   If yes, run the matching script in advanced/ (Hermes must be FULLY quit for the
+   build): advanced/statusbar/apply-statusbar.mjs and/or
+   advanced/extras-caduceus/apply-caduceus.mjs.
+4. If anything fails, DIAGNOSE YOURSELF FIRST: read the failing command's output
+   and run  node scripts/diagnostics.mjs --logs  (reads errors.log, desktop.log,
+   agent.log, gateway.log); check any .rej files; fix the likely cause; rebuild;
+   re-check the logs. Follow ai/install.md and ai/repair.md for the full self-heal
+   protocol. Only ask me as a LAST RESORT, once — and for a visual-only problem,
+   ask for a screenshot plus the DevTools console (Ctrl/Cmd+Shift+I -> Console).
+
+Rules: back up before overwriting; confirm before editing config.yaml or applying
+a patch; never run `npm run pack` while Hermes is open.
+```
+
+That's the whole install — it clones the repo, sets up the theme + pets, and
+(with your OK) the advanced tiers, diagnosing from the Hermes logs on its own if
+something breaks. A plain chat assistant with no tools can't run it — use the
+manual steps below instead.
+
+## Manual install (theme + pets)
 
 ```bash
 git clone https://github.com/Elevatormusic/hermes-classic-gold-pack
@@ -69,24 +102,6 @@ Restart Hermes to see the pets and theme.
 | **Two pets** | `noir-neko`, `noir-neko-ascii-fine` sprite mascots | `node install.mjs` → `HERMES_HOME/pets/` |
 | **Status bar** | Custom TelemetryTape HUD (CPU/mem, context, timers) | Source patch + rebuild (advanced) |
 | **Caduceus extras** | Caduceus loader, backdrop, hero wordmark | Optional source patch + rebuild (advanced) |
-
-## AI-assisted install (optional)
-
-Prefer to let an AI handle everything — including reconciling the advanced
-patches to your Hermes version? Paste [`ai/install.md`](ai/install.md) into an
-**agentic** coding assistant (Claude Code, Cursor, Codex CLI — one that can run
-shell commands and edit files). It runs the core install, offers the advanced
-tiers, and falls back to [`ai/repair.md`](ai/repair.md) if a patch rejects.
-
-It's built to be hands-off: when something fails it **diagnoses itself first** —
-reads its own build/patch output and the Hermes logs via
-`node scripts/diagnostics.mjs --logs` (errors.log, desktop.log, agent.log,
-gateway.log), inspects any `.rej` files, fixes the likely cause, rebuilds, and
-re-checks the logs — looping before it bothers you. It only asks you as a **last
-resort, once**, and for genuinely visual problems it requests a specific
-screenshot (plus the DevTools console) with exact steps. Only if it truly can't
-fix it does it hand you a pre-filled issue link to review and submit. Plain chat
-assistants (no tools) instead hand you the exact commands.
 
 ## Advanced: status bar + caduceus extras
 

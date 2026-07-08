@@ -53,7 +53,14 @@ EOF
 ```
 
 Then tell the user: *"I filed this as an issue — <url>."* Give them the URL the
-command returns; nothing else is required of them.
+command returns.
+
+**If the problem is visual** — something renders wrong, is missing, or looks off
+(a broken layout, a hidden panel, a mangled glyph) — **a screenshot is worth more
+than any description.** `gh` can't upload images, so ask the user to add one:
+open the issue URL, scroll to the comment box, and **drag the screenshot in** (or
+click the paperclip). Say it in one line, e.g. *"This is a visual glitch, so a
+screenshot would really help — open <url> and drag one into the comment box."*
 
 **Fallback:** if `gh` isn't installed or authenticated, run
 `node scripts/diagnostics.mjs --logs` and give the user the pre-filled
@@ -73,6 +80,9 @@ command returns; nothing else is required of them.
 
 ### Environment
 <paste the "### Environment" block printed by `node scripts/diagnostics.mjs` — env only, no raw logs>
+
+### Screenshot
+<for a visual issue, attach one after filing — drag it into the comment box (see the screenshot note above)>
 
 ### Repro
 <minimal steps to reproduce, if known>

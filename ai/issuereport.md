@@ -1,40 +1,88 @@
 # Report a problem — instructions for an AI assistant
 
-Help the user file a good bug report for the **Hermes "Classic Gold" pack**.
+Something in the **Hermes-Agent "Classic Gold" pack** isn't working. Your job
+order is: **fix it first → if it's genuinely unfixable, file a good issue for the
+user automatically** (they shouldn't have to upload anything or click a link).
 
-> **You need shell + file access.** If you can't run commands, tell the user to
-> run `node scripts/diagnostics.mjs --logs` themselves and open the link it prints.
+> **You need shell + file access.** If you can't run commands, run
+> `node scripts/diagnostics.mjs --logs` for the user and hand them the pre-filled
+> issue link it prints.
 
-> **Tell the user what you're doing:** you'll gather diagnostics **locally** (nothing
-> leaves their machine), try once more to fix it, and then hand them a pre-filled
-> issue link to **review** — you never file anything yourself.
+## Step 1 — Try to FIX it first (don't report a fixable problem)
 
-## Steps
+Exhaust the self-heal before reporting. Most problems are fixable here:
 
-**1. Gather diagnostics** from inside the repo:
+- Re-read the failing command's own output.
+- Run `node scripts/diagnostics.mjs --logs` and read the Hermes-Agent log tails
+  (`errors.log`, `desktop.log`, `agent.log`, `gateway.log`); check for `.rej`
+  files from a rejected `git apply`.
+- Follow [`ai/install.md`](install.md) (the self-heal loop) and
+  [`ai/repair.md`](repair.md) (reconcile a patch that rejected on a different
+  Hermes-Agent version). Loop up to 3 times.
+
+Only continue to reporting if it truly cannot be fixed.
+
+## Step 2 — Gather diagnostics
 
 ```bash
 node scripts/diagnostics.mjs --logs --error "<one line: what failed>"
 ```
 
-This prints the environment (OS, Node, Hermes commit), recent Hermes log tails
-(`errors.log`, `desktop.log`, `agent.log`, `gateway.log`), **and** a pre-filled
-GitHub "New Issue" link.
+Note the environment (OS, Node, Hermes-Agent commit, on-base?) and read the logs
+so your summary is accurate. **Do not paste raw logs** into the issue — they can
+contain prompts and local paths. Summarize instead; include raw logs only if the
+user explicitly asks.
 
-**2. Try once more.** Read those logs and make one more attempt to explain or fix
-the failure yourself (see [`ai/install.md`](install.md) and
-[`ai/repair.md`](repair.md)).
+## Step 3 — File the issue automatically
 
-**3. Hand off the report.** If it still isn't resolved, give the user the printed
-**issue URL** and ask them to review and submit it.
+Don't make the user click or accept a link. **Check for duplicates, then file it
+directly:**
 
-- **Do not file the issue yourself** — the user reviews first.
-- The URL body only contains the environment summary. The log tails are shown to
-  you locally and are **not** placed in the issue unless the user chooses to add
-  them.
-- Alternative: the user can open the repo's **Issues → New → "Install failure"**
-  template and paste the diagnostics.
+```bash
+# 1. Avoid duplicates — comment on a match instead of opening a new one.
+gh issue list --repo Elevatormusic/hermes-classic-gold-pack --state open --search "<keywords>"
+
+# 2. File it (fill the template below into the body).
+gh issue create \
+  --repo Elevatormusic/hermes-classic-gold-pack \
+  --title "<concise, specific title>" \
+  --body "$(cat <<'EOF'
+<filled template>
+EOF
+)"
+```
+
+Then tell the user: *"I filed this as an issue — <url>."* Give them the URL the
+command returns; nothing else is required of them.
+
+**Fallback:** if `gh` isn't installed or authenticated, run
+`node scripts/diagnostics.mjs --logs` and give the user the pre-filled
+`issues/new?...` URL it prints so they can open it in one click.
+
+## Issue template — fill this into the `--body`
+
+```markdown
+### What's wrong
+<one short paragraph: the symptom, in plain language>
+
+### What I tried (self-heal)
+<the fixes you attempted from ai/install.md / ai/repair.md and why they didn't resolve it>
+
+### Suspected area
+<theme / pets / status bar / caduceus extras / installer — name the file or patch if known>
+
+### Environment
+<paste the "### Environment" block printed by `node scripts/diagnostics.mjs` — env only, no raw logs>
+
+### Repro
+<minimal steps to reproduce, if known>
+```
 
 ## Rules
-- Never submit the issue for the user.
-- Remind the user to remove anything private from logs before pasting them anywhere.
+
+- **Fix first;** only file if the problem is genuinely unfixable.
+- **One issue.** Search open issues first and comment on a match rather than duplicating.
+- Keep the **title specific** (e.g. `status bar patch rejects on hermes-agent@<sha>`),
+  not "it doesn't work."
+- **Never** include raw logs, secrets, tokens, or personal paths unless the user opts in.
+- If you filed it, tell the user the URL — don't ask them to submit anything.

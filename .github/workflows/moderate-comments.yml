@@ -68,15 +68,10 @@ jobs:
             const issue_number = p.issue.number;
             const { owner, repo } = context.repo;
 
-            // 1) ensure the label exists, then apply it
-            try {
-              await github.rest.issues.createLabel({ owner, repo, name: 'possible-malware', color: 'd73a4a', description: 'Auto-flagged: possible malware / social-engineering' });
-            } catch {} // already exists
-            try {
-              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['possible-malware'] });
-            } catch (e) { core.warning('addLabels: ' + e.message); }
-
-            // 2) hide the comment (reversible) — issue bodies can't be minimized
+            // 1) hide the comment (reversible) — issue bodies can't be minimized.
+            //    We deliberately do NOT label the issue: the label shows in the issue
+            //    list/title and scares visitors, and the flag is usually a *comment*
+            //    on an otherwise-fine issue. Hiding + the warning below are enough.
             if (isComment) {
               try {
                 await github.graphql(
@@ -86,7 +81,7 @@ jobs:
               } catch (e) { core.warning('minimize: ' + e.message); }
             }
 
-            // 3) leave a visible warning
+            // 2) leave a visible warning
             const reasons = [
               hasFileAttachment ? 'a file attachment' : null,
               hasArchiveOrExe ? 'an archive/executable link' : null,
@@ -99,7 +94,7 @@ jobs:
               '',
               `**Do not download or run anything it links or attaches.** Legitimate fixes are committed to this repository by its maintainers — never delivered as an attachment or a "run this" script.`,
               '',
-              '_Maintainer: false positive? Un-hide the comment and remove the `possible-malware` label._',
+              '_Maintainer: false positive? Just un-hide the comment._',
             ].join('\n');
             try {
               await github.rest.issues.createComment({ owner, repo, issue_number, body: warn });

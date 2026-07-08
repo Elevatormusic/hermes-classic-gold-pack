@@ -67,7 +67,6 @@ jobs:
 
             const issue_number = p.issue.number;
             const { owner, repo } = context.repo;
-            const secUrl = `https://github.com/${owner}/${repo}/blob/main/SECURITY.md`;
 
             // 1) ensure the label exists, then apply it
             try {
@@ -98,7 +97,7 @@ jobs:
             const warn = [
               `⚠️ **Auto-moderated.** This ${isComment ? 'comment' : 'issue'} from @${author} was flagged (${reasons})` + (isComment ? ' and hidden pending review.' : '.'),
               '',
-              `**Do not download or run anything it links or attaches.** This project's fixes ship as commits in this repo — never as an attachment or a "run this" script. See [SECURITY.md](${secUrl}).`,
+              `**Do not download or run anything it links or attaches.** Legitimate fixes are committed to this repository by its maintainers — never delivered as an attachment or a "run this" script.`,
               '',
               '_Maintainer: false positive? Un-hide the comment and remove the `possible-malware` label._',
             ].join('\n');

@@ -179,6 +179,16 @@ export function applyTier({ scriptDir, patchName, tier, label }) {
     }
     writePackStamp(tier, head)
     console.log('✓ Packed. Relaunch Hermes.')
+    console.log('')
+    console.log('▶ IMPORTANT — keep this through Hermes updates:')
+    console.log('  A Hermes update rebuilds the app from source and WIPES this tier.')
+    console.log('  • Update with:  node update-hermes.mjs   (NOT the in-app Update button)')
+    console.log('    — it updates Hermes AND re-applies this pack in one step.')
+    if (process.platform === 'win32') {
+      console.log('  • Optional auto-reminder if you forget and use the in-app button:')
+      console.log('      powershell -ExecutionPolicy Bypass -File advanced/watcher/register-watcher.ps1')
+    }
+    console.log('  • If an update ever leaves it broken:  see ai/brokenupdatefix.md')
   } else {
     console.log('• Skipped build (--no-build). Run: cd apps/desktop && npm run pack (Hermes quit).')
   }

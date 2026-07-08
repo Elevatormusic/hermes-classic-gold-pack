@@ -83,6 +83,17 @@ scripts **refuse to build while Hermes is running** and tell you so. Handle it:
   command to run after quitting Hermes:
   `cd "<repo>/apps/desktop" && npm run pack`.
 
+**After the advanced tier installs, TELL THE USER how to keep it** (a Hermes
+update rebuilds from source and wipes it — this is the #1 support issue):
+
+- From now on, **update Hermes with `node update-hermes.mjs`, NOT the in-app
+  Update button** — it updates Hermes *and* re-applies this pack in one step.
+- **Offer to set up the auto-reminder** (Windows): with the user's OK, run
+  `powershell -ExecutionPolicy Bypass -File advanced/watcher/register-watcher.ps1`
+  — a read-only Scheduled Task that notifies them if a future in-app update ever
+  reverts the theme. (Remove with `unregister-watcher.ps1`.)
+- If an update ever leaves it broken, point them to `ai/brokenupdatefix.md`.
+
 **4. Theme — run the automated installer (do this LAST; it restarts Hermes):**
 
 ```bash

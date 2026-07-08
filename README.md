@@ -89,15 +89,29 @@ entwined sine-snakes that animate as a gold particle trail while Hermes-Agent is
 ## 🔁 What survives a Hermes-Agent update?
 
 When Hermes-Agent updates, it replaces the whole app with a fresh copy — so anything
-built *into the app* is wiped, while your own settings and data stay put. If an
-update removes the status bar or background, just re-run the install.
+built *into the app* is wiped, while your own settings and data stay put.
+
+> ### 🔄 Update Hermes-Agent with one command
+> Instead of the in-app **Update** button, run:
+> ```bash
+> node update-hermes.mjs
+> ```
+> It updates Hermes-Agent **and** re-applies the status bar + background in one step,
+> so the app never comes back un-themed. (Already updated in-app and lost the theme?
+> Run `node update-hermes.mjs --no-update` to just restore it.)
 
 | Piece | On a Hermes-Agent update |
 |---|---|
 | 🎨 **Theme** | ✅ stays put (saved in your settings) |
 | 🐾 **Pets** | ✅ survive (saved in your Hermes-Agent folder) |
-| 📊 **Status bar** | 🔁 removed — re-run the install |
-| 🌀 **Background & loader** | 🔁 removed — re-run the install |
+| 📊 **Status bar** | 🔁 rebuilt in — use `update-hermes.mjs` (or re-run the install) |
+| 🌀 **Background & loader** | 🔁 rebuilt in — use `update-hermes.mjs` (or re-run the install) |
+
+> 💡 **Forgetful?** On Windows you can register a one-time background reminder that
+> nudges you if an in-app update ever reverts the theme:
+> `powershell -ExecutionPolicy Bypass -File advanced/watcher/register-watcher.ps1`
+> — it's read-only (just a notification). If an update ever leaves things broken,
+> see [`ai/brokenupdatefix.md`](ai/brokenupdatefix.md).
 
 ---
 

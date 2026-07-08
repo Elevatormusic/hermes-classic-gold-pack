@@ -1,0 +1,6 @@
+{
+    "id":  "noir-neko-ascii-fine",
+    "displayName":  "Noir Neko ASCII Fine",
+    "description":  "A denser Cascadia Code ASCII version of Noir Neko using smaller gold, olive, orange, copper, and black glyphs.",
+    "spritesheetPath":  "spritesheet.webp"
+}

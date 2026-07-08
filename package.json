@@ -1,0 +1,13 @@
+{
+  "name": "hermes-classic-gold-pack",
+  "version": "1.0.0",
+  "description": "Classic Hermes gold theme + Noir Neko pets + custom status bar for the Hermes agent",
+  "type": "module",
+  "bin": { "hermes-classic-gold-pack": "install.mjs" },
+  "scripts": {
+    "test": "node --test",
+    "install-pack": "node install.mjs"
+  },
+  "license": "MIT",
+  "engines": { "node": ">=18" }
+}

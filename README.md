@@ -30,6 +30,11 @@ inside it and follow those steps exactly.
 That's it. The assistant installs the theme + pets, then asks if you also want the
 status bar and background. Prefer to do it by hand? See **Install** below.
 
+> **Cautious?** [`SECURITY.md`](SECURITY.md) summarizes exactly what each script
+> does — no telemetry or external network calls, every change backed up and
+> reversible. Only ever run code from this repo, never a "fix" someone attaches to
+> an issue.
+
 ---
 
 ## 🖼️ What's inside
@@ -42,8 +47,9 @@ piece on its own.
 ![Classic Hermes gold theme — dark & light palette](docs/theme-palette.png)
 
 The `hermes-classic-gold` desktop theme — warm gold borders, cornsilk text, in
-both **light and dark**. Installs via a one-time DevTools console paste
-(localStorage), so it needs no rebuild and works on any Hermes version.
+both **light and dark**. The AI installer sets it for you (`node theme/apply-theme.mjs`);
+it lives in the app's localStorage, so it needs no rebuild and works on any Hermes
+version.
 
 ### 📊 Status bar — TelemetryTape HUD
 
@@ -99,9 +105,14 @@ node install.mjs --activate noir-neko-ascii-fine
 - `--home <path>` points at a specific `HERMES_HOME` (the folder with `config.yaml`);
   otherwise it's detected automatically.
 
-Then install the **theme** (one manual step — there's no theme-import API): open
-Hermes Desktop → `Ctrl/Cmd+Shift+I` → **Console** tab → paste the contents of
-[`theme/install-theme.js`](theme/install-theme.js) → Enter. Restart Hermes.
+Then the **theme**. Automatic (restarts Hermes once — run it last):
+
+```bash
+node theme/apply-theme.mjs
+```
+
+Or by hand: open Hermes Desktop → `Ctrl/Cmd+Shift+I` → **Console** tab → paste the
+contents of [`theme/install-theme.js`](theme/install-theme.js) → Enter. Restart Hermes.
 </details>
 
 ---

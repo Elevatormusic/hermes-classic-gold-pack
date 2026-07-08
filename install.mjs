@@ -83,13 +83,16 @@ function main(argv) {
     console.log('• (Pets installed but not activated — pass --activate <slug> or pick one in-app.)')
   }
 
-  // 3) Theme (DevTools paste)
+  // 3) Theme
   const snippetPath = join(HERE, 'theme', 'install-theme.js')
-  console.log('\n──────── Gold theme (one manual step) ────────')
-  console.log('Open Hermes Desktop → press Ctrl/Cmd+Shift+I → Console tab → paste the')
-  console.log('contents of theme/install-theme.js → Enter. (It self-reverts per the header.)')
-  console.log('Snippet path: ' + snippetPath)
-  console.log('──────────────────────────────────────────────')
+  console.log('\n──────── Gold theme ────────')
+  console.log('Automatic (recommended):  node theme/apply-theme.mjs')
+  console.log('  Applies the theme for you — it restarts Hermes once, so run it last.')
+  console.log('  Falls back to a manual paste if it can’t run automatically.')
+  console.log('Manual:  open Hermes → Ctrl/Cmd+Shift+I → Console → paste')
+  console.log('  the contents of theme/install-theme.js → Enter.')
+  console.log('  Snippet path: ' + snippetPath)
+  console.log('────────────────────────────')
   if (process.env.HCGP_PRINT_SNIPPET === '1') {
     console.log('\n' + readFileSync(snippetPath, 'utf8'))
   }

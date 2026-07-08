@@ -1,17 +1,38 @@
-# Hermes Classic Gold Pack
+# 🪙 Hermes Classic Gold Pack
+
+> A warm **gold makeover** for the [Hermes agent](https://github.com/NousResearch/hermes-agent) desktop app — theme, pets, status bar, and background.
+
+[![Release](https://img.shields.io/github/v/release/Elevatormusic/hermes-classic-gold-pack?color=CD7F32&label=release)](https://github.com/Elevatormusic/hermes-classic-gold-pack/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-B8860B.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/Hermes-desktop-FFD700)
+![Install](https://img.shields.io/badge/install-AI--assisted-DAA520)
 
 ![Hermes desktop running the Classic Gold theme — caduceus wordmark & backdrop, custom TelemetryTape status bar, and the Noir Neko ASCII pet](docs/hermes-classic-gold.png)
 
-A drop-in look for the [Hermes agent](https://github.com/NousResearch/hermes-agent):
-the **Classic Hermes gold theme** (warm gold borders, cornsilk text, light + dark),
-**two Noir Neko pets**, and — for the adventurous — a custom **TelemetryTape
-status bar** and optional **caduceus extras** (loader, backdrop, hero wordmark).
+**What is this?** A cosmetic pack for Hermes Desktop: a gold **theme**, two animated
+**pets**, an optional **status bar**, and an optional **caduceus background**. The
+theme and pets take about 30 seconds; the status bar and background are optional extras.
 
-The theme and pets install in ~30 seconds and work on any machine. The status
-bar and extras edit the desktop app's source, so they're a separate, honest
-"advanced" tier (see the caveats below).
+---
 
-## What's inside
+## ⚡ Quick start
+
+> **The easy way** — paste the prompt below into an AI coding assistant that can run
+> commands on your computer (**Claude Code**, **Cursor**, or **Codex CLI**). It fetches
+> everything and installs it for you. Nothing else to download.
+
+```text
+You have shell + file access. Install the Hermes "Classic Gold" pack: clone
+https://github.com/Elevatormusic/hermes-classic-gold-pack, then open ai/install.md
+inside it and follow those steps exactly.
+```
+
+That's it. The assistant installs the theme + pets, then asks if you also want the
+status bar and background. Prefer to do it by hand? See **Install** below.
+
+---
+
+## 🖼️ What's inside
 
 The screenshot above is the real desktop with **everything applied**. Here's each
 piece on its own.
@@ -57,54 +78,15 @@ entwined sine-snakes that animate as a gold particle trail while Hermes is worki
 
 <sub>Left: <b>Noir Neko</b>. Right: <b>Noir Neko ASCII Fine</b>. (Idle animations, shown on the theme's dark background.) Installed by <code>node install.mjs</code>.</sub>
 
-> **Note on scope:** this pack targets the Hermes *desktop* app. The core
-> installer is cross-platform (Windows/macOS/Linux); it has been verified on
-> Windows. macOS/Linux path handling is best-effort — issues/PRs welcome.
-
 ---
 
-## Requirements
+## 📥 Install
 
-- Hermes installed (the pack finds your `HERMES_HOME` automatically).
-- **Node.js** to run the installer — it ships with Hermes (Electron), so you
-  already have it.
-- For the **advanced** tier only: a Hermes desktop **dev environment**
-  (`apps/desktop` with its dependencies installed) and Git.
+**AI-assisted (recommended)** — use the **Quick start** prompt above. It installs
+the theme + pets, then offers the advanced status bar and background.
 
-## Install with an AI agent (recommended)
-
-Copy the prompt below and paste it into an **agentic** coding assistant that can
-run shell commands and edit files — **Claude Code, Cursor, or Codex CLI**. It
-fetches the repo and does everything itself; you don't open or paste any file.
-
-```text
-You have shell + file access. Install the Hermes "Classic Gold" pack on my machine.
-
-1. Clone https://github.com/Elevatormusic/hermes-classic-gold-pack and cd into it.
-2. Core (theme + pets): run  node install.mjs --activate noir-neko-ascii-fine
-   Then tell me the one manual theme step: open Hermes Desktop -> Ctrl/Cmd+Shift+I
-   -> Console tab -> paste the contents of theme/install-theme.js -> Enter.
-3. Ask me whether I also want the custom status bar and/or the caduceus extras.
-   If yes, run the matching script in advanced/ (Hermes must be FULLY quit for the
-   build): advanced/statusbar/apply-statusbar.mjs and/or
-   advanced/extras-caduceus/apply-caduceus.mjs.
-4. If anything fails, DIAGNOSE YOURSELF FIRST: read the failing command's output
-   and run  node scripts/diagnostics.mjs --logs  (reads errors.log, desktop.log,
-   agent.log, gateway.log); check any .rej files; fix the likely cause; rebuild;
-   re-check the logs. Follow ai/install.md and ai/repair.md for the full self-heal
-   protocol. Only ask me as a LAST RESORT, once — and for a visual-only problem,
-   ask for a screenshot plus the DevTools console (Ctrl/Cmd+Shift+I -> Console).
-
-Rules: back up before overwriting; confirm before editing config.yaml or applying
-a patch; never run `npm run pack` while Hermes is open.
-```
-
-That's the whole install — it clones the repo, sets up the theme + pets, and
-(with your OK) the advanced tiers, diagnosing from the Hermes logs on its own if
-something breaks. A plain chat assistant with no tools can't run it — use the
-manual steps below instead.
-
-## Manual install (theme + pets)
+<details>
+<summary><b>Install by hand (theme + pets)</b></summary>
 
 ```bash
 git clone https://github.com/Elevatormusic/hermes-classic-gold-pack
@@ -113,57 +95,93 @@ node install.mjs --activate noir-neko-ascii-fine
 ```
 
 - `--activate <slug>` sets that pet active (`noir-neko` or `noir-neko-ascii-fine`).
-  **Omit it** to install both pets without touching your current pet.
-- `--home <path>` targets a specific `HERMES_HOME` (the folder containing
-  `config.yaml`). Without it, the installer auto-detects.
+  Omit it to install both pets without changing your current pet.
+- `--home <path>` points at a specific `HERMES_HOME` (the folder with `config.yaml`);
+  otherwise it's detected automatically.
 
-Then install the **theme** (one manual step — there's no theme-import API):
-open Hermes Desktop → `Ctrl/Cmd+Shift+I` → **Console** tab → paste the contents
-of [`theme/install-theme.js`](theme/install-theme.js) → Enter. It registers and
-activates the gold theme (dark mode) and reloads.
+Then install the **theme** (one manual step — there's no theme-import API): open
+Hermes Desktop → `Ctrl/Cmd+Shift+I` → **Console** tab → paste the contents of
+[`theme/install-theme.js`](theme/install-theme.js) → Enter. Restart Hermes.
+</details>
 
-Restart Hermes to see the pets and theme.
+---
 
-## Advanced: status bar + caduceus extras
+## 🗑️ Uninstall
 
-These edit Hermes desktop **source** and rebuild the app. Read
-[`advanced/README.md`](advanced/README.md) first. Three caveats up front:
+Paste this into your AI assistant — it asks which parts to remove, then removes them:
 
-1. **Needs the desktop dev env + Node** (`apps/desktop` deps installed, Hermes
-   fully quit for the build).
-2. **A Hermes app update reverts them** — you'll re-apply after updates.
-3. **Version-specific**: patches are generated against
-   `NousResearch/hermes-agent@8301654`. On a different version they may reject;
-   the scripts fall back to full-file copies, and `ai/repair.md` can reconcile
-   the rest.
-
-```bash
-# status bar
-node advanced/statusbar/apply-statusbar.mjs --repo "<path-to>/hermes-agent"
-# optional caduceus extras
-node advanced/extras-caduceus/apply-caduceus.mjs --repo "<path-to>/hermes-agent"
+```text
+You have shell + file access. Uninstall the Hermes "Classic Gold" pack: open
+https://github.com/Elevatormusic/hermes-classic-gold-pack (clone it if needed),
+read ai/uninstall.md, ask me which parts to remove, then follow it.
 ```
 
-## Uninstall / revert
+<details>
+<summary><b>Uninstall by hand</b></summary>
 
-- **Theme** — pick another theme in Appearance, or in the DevTools console:
-  `localStorage.setItem('hermes-desktop-theme-v2','nous');location.reload()`.
-- **Pets** — delete `HERMES_HOME/pets/<slug>`. (Don't use the in-app "remove" on
-  a pet the desktop already adopted — just delete/overwrite the folder.) Restore
-  your active pet in `config.yaml` (a `config.yaml.bak` was written if you used
-  `--activate`).
-- **Status bar / extras** — restore the `*.orig` backups the apply scripts made,
-  then `cd apps/desktop && npm run pack` (Hermes quit) and relaunch.
+- **Theme** — open Hermes → Appearance → pick another theme, or in the DevTools
+  console: `localStorage.setItem('hermes-desktop-theme-v2','nous');location.reload()`.
+- **Pets** — delete `HERMES_HOME/pets/noir-neko` and `.../noir-neko-ascii-fine`.
+  Don't use the in-app "remove" on an adopted pet — just delete the folder. Restore
+  your previous pet from `config.yaml.bak` if needed.
+- **Status bar / background** — restore the `*.orig` backups the apply scripts made,
+  then `cd apps/desktop && npm run pack` (Hermes quit).
 
-## Reporting problems
+Full details: [`ai/uninstall.md`](ai/uninstall.md).
+</details>
 
-Run `node scripts/diagnostics.mjs` and open the pre-filled issue URL it prints
-(or use **Issues → New → "Install failure"**). Review before submitting — the
-issue body includes your OS, Node version, and Hermes commit, nothing else. Add
-`--logs` to also print recent Hermes log tails locally for diagnosis (those are
-**not** put in the issue URL — share them only if you choose, after reviewing).
+---
 
-## Credits & license
+## 🐞 Report a problem
+
+Paste this into your AI assistant — it collects diagnostics and hands you a
+ready-to-submit GitHub issue link (you review before sending):
+
+```text
+You have shell + file access. Something in the Hermes "Classic Gold" pack isn't
+working. In https://github.com/Elevatormusic/hermes-classic-gold-pack, read
+ai/issuereport.md and follow it: gather diagnostics and give me a pre-filled
+GitHub issue link to review before I submit.
+```
+
+Doing it yourself? Run `node scripts/diagnostics.mjs --logs` and open the link it
+prints, or use **Issues → New → "Install failure"**. The issue only includes your
+OS, Node version, and Hermes commit.
+
+---
+
+## 🔧 Advanced — status bar & caduceus background
+
+The status bar and background edit Hermes' source code and rebuild the app, so
+they're a separate tier. The AI installer handles them for you; to do it by hand,
+see [`advanced/README.md`](advanced/README.md).
+
+> **Heads-up:** the advanced pieces need a Hermes desktop **dev environment**
+> (`apps/desktop` with dependencies installed), Hermes must be **fully quit** for
+> the rebuild, and a **Hermes app update reverts them** (just re-run the installer).
+> Patches target `NousResearch/hermes-agent@8301654`; on other versions the AI
+> reconciles them via [`ai/repair.md`](ai/repair.md).
+
+---
+
+## ❓ Requirements & jargon
+
+- **Hermes** installed. The pack finds your **HERMES_HOME** (the folder holding
+  `config.yaml`) automatically.
+- **Node.js** to run the installer — it ships with Hermes, so you already have it.
+- **"Agentic assistant"** = an AI that can run commands and edit files on your
+  machine (Claude Code, Cursor, Codex CLI). A plain chatbot can't do the install.
+- **"DevTools console"** = the developer panel inside Hermes, opened with
+  `Ctrl/Cmd+Shift+I` → **Console** tab.
+- Advanced tier only: a Hermes desktop **dev environment** + Git.
+
+> **Scope:** targets the Hermes *desktop* app. The installer is cross-platform
+> (Windows/macOS/Linux) but verified on Windows; other OSes are best-effort —
+> issues and PRs welcome.
+
+---
+
+## 📜 Credits & license
 
 Theme, pets, and status bar by **Shaya (Elevatormusic)**. Built for the Hermes
 agent by Nous Research. Released under the [MIT License](LICENSE).

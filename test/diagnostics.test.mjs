@@ -10,7 +10,7 @@ const INFO = {
   arch: 'x64',
   node: 'v24.0.0',
   hermesHome: 'C:/x/hermes',
-  agentHead: '8301654',
+  agentHead: '4d7f8ade',
   onBase: true,
   packStamp: null,
 }
@@ -19,7 +19,7 @@ test('formatDiagnostics includes key fields and on-base verdict', () => {
   const s = formatDiagnostics(INFO)
   assert.match(s, /win32/)
   assert.match(s, /v24\.0\.0/)
-  assert.match(s, /on base 8301654: yes/i)
+  assert.match(s, /on base 4d7f8ad: yes/i)
 })
 
 test('buildIssueUrl encodes title+body and targets the repo with the label', () => {

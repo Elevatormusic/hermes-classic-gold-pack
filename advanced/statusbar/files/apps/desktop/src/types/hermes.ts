@@ -399,6 +399,7 @@ export interface SessionRuntimeInfo {
   cwd?: string
   desktop_contract?: number
   fast?: boolean
+  install_warning?: string
   model?: string
   personality?: string
   provider?: string
@@ -413,20 +414,21 @@ export interface SessionRuntimeInfo {
 }
 
 export interface UsageStats {
-  api_duration_s?: number
   calls: number
   context_max?: number
   context_percent?: number
   context_used?: number
   cost_usd?: number
   input: number
+  output: number
+  total: number
+  // Classic Gold status bar telemetry (throughput / phase / last-turn deltas).
+  api_duration_s?: number
   last_input?: number
   last_output?: number
   last_total?: number
-  output: number
   phase?: string
   tokens_per_second?: number
-  total: number
 }
 
 /** One graph node in the star map (learned skill or memory chunk). */

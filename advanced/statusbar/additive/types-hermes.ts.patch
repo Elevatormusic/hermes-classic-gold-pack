@@ -1,0 +1,18 @@
+diff --git a/apps/desktop/src/types/hermes.ts b/apps/desktop/src/types/hermes.ts
+index 9133fb4..5ff3be3 100644
+--- a/apps/desktop/src/types/hermes.ts
++++ b/apps/desktop/src/types/hermes.ts
+@@ -422,6 +422,13 @@ export interface UsageStats {
+   input: number
+   output: number
+   total: number
++  // Classic Gold status bar telemetry (throughput / phase / last-turn deltas).
++  api_duration_s?: number
++  last_input?: number
++  last_output?: number
++  last_total?: number
++  phase?: string
++  tokens_per_second?: number
+ }
+ 
+ /** One graph node in the star map (learned skill or memory chunk). */

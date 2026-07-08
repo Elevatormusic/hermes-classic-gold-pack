@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom'
 import { useGatewayRequest } from '@/app/gateway/hooks/use-gateway-request'
 import { useModelControls } from '@/app/session/hooks/use-model-controls'
 import { ContextUsagePanel } from '@/app/shell/context-usage-panel'
-import { useSystemResources } from '@/app/shell/hooks/use-system-resources'
 import { ModelMenuCloseContext, ModelMenuPanel } from '@/app/shell/model-menu-panel'
 import {
   DropdownMenu,
@@ -27,6 +26,7 @@ import { ChevronDown } from '@/lib/icons'
 import { LiveDuration } from '@/lib/statusbar'
 import { normalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
+import { $panesFlipped, $sidebarOpen, $sidebarWidth } from '@/store/layout'
 import { setModelPreset } from '@/store/model-presets'
 import { notifyError } from '@/store/notifications'
 import {
@@ -42,6 +42,50 @@ import {
   $turnStartedAt,
   setCurrentReasoningEffort
 } from '@/store/session'
+
+// Folded in from the former use-system-resources.ts hook. Keeping it in this
+// tracked file (rather than a separate new file) means a Hermes-Agent update
+// reverts it cleanly instead of orphaning a file that breaks the rebuild. See #1.
+interface SystemResources {
+  ram: { total: number; used: number }
+  vram: { total: number; used: number } | null
+}
+
+function useSystemResources(intervalMs = 2500): SystemResources | null {
+  const [resources, setResources] = useState<SystemResources | null>(null)
+
+  useEffect(() => {
+    const read = window.hermesDesktop?.getSystemResources
+
+    if (!read) {
+      return
+    }
+
+    let cancelled = false
+
+    const tick = async () => {
+      try {
+        const next = await read()
+
+        if (!cancelled) {
+          setResources(next)
+        }
+      } catch {
+        // keep the last reading through a transient nvidia-smi / IPC hiccup
+      }
+    }
+
+    void tick()
+    const timer = window.setInterval(() => void tick(), intervalMs)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [intervalMs])
+
+  return resources
+}
 
 const SYMBOLS = {
   caduceus: '\u2695',
@@ -498,8 +542,8 @@ function TelemetryTape() {
       className="pointer-events-none absolute left-1/2 z-10 flex h-7 -translate-x-1/2 items-center overflow-hidden rounded-[3px] border border-[#F2B705]/55 bg-[#0D0D0D]/98 px-3 text-[12.5px]/none font-semibold text-[#CFC39D] shadow-[inset_0_0_0_1px_rgba(115,90,16,0.30),0_6px_14px_rgba(0,0,0,0.22)]"
       style={{
         bottom: 'calc(100% + 0.15rem)',
-        left: 'calc(50% + var(--pane-chat-sidebar-width, 0px) / 2)',
-        maxWidth: 'calc(100% - var(--pane-chat-sidebar-width, 0px) - 2rem)',
+        left: '50%',
+        maxWidth: 'calc(100% - 2rem)',
         width: 'fit-content'
       }}
       title={detailTitle}
@@ -650,16 +694,29 @@ function TelemetryTape() {
 
 export function StatusbarControls({ className, leftItems = [], items = [], style, ...props }: StatusbarControlsProps) {
   const navigate = useNavigate()
+  const sidebarWidth = useStore($sidebarWidth)
+  const sidebarOpen = useStore($sidebarOpen)
+  const panesFlipped = useStore($panesFlipped)
+  // Start the stock status bar at the chat pane's left edge so it follows the
+  // prompt window instead of spilling under the left menu. 0 when the sidebar is
+  // collapsed or the panes are flipped (the left pane isn't the chat sidebar).
+  // (--pane-chat-sidebar-width only exists inside PaneShell; this footer is a
+  // sibling of it, so we read the width from the layout store instead.)
+  const leftInset = !panesFlipped && sidebarOpen ? sidebarWidth : 0
 
   return (
     <footer
       className={cn(
-        'absolute inset-x-0 bottom-0 z-[31] flex h-8 shrink-0 items-center justify-between gap-2 border-t border-[#735A10]/45 bg-[#0D0D0D]/96 px-1 py-0 text-(--ui-text-tertiary) shadow-[0_-8px_18px_rgba(0,0,0,0.22)] [-webkit-app-region:no-drag]',
+        // Classic Gold: start at the chat-sidebar's right edge (left set inline
+        // below) so the stock status bar follows the prompt window instead of
+        // spilling under the left menu. Collapses to full width when no sidebar.
+        'absolute right-0 bottom-0 z-[31] flex h-8 shrink-0 items-center justify-between gap-2 border-t border-[#735A10]/45 bg-[#0D0D0D]/96 px-1 py-0 text-(--ui-text-tertiary) shadow-[0_-8px_18px_rgba(0,0,0,0.22)] [-webkit-app-region:no-drag]',
         className
       )}
       data-slot="statusbar"
       style={{
         fontFamily: '"Cascadia Code", "Cascadia Mono", "JetBrains Mono", Consolas, monospace',
+        left: `${leftInset}px`,
         ...style
       }}
       {...props}

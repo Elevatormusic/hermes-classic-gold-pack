@@ -110,6 +110,11 @@ up to 3 times:
   prints (`errors.log`, `desktop.log`, `agent.log`, `gateway.log`).
 - Check for `.rej` files left by a failed `git apply`.
 - Fix the most likely cause, re-run the step, and re-check the logs.
+- **[`ai/brokenupdatefix.md`](brokenupdatefix.md) is your symptom→cause→fix map**
+  — blank screen, `tsc` errors (`zoom`/`getSystemResources`), orphan files,
+  missing composer/tape/background, model pill reappearing. Match your error to
+  a row and apply that fix. This is especially the case if the user just updated
+  Hermes (an update reverts the whole advanced tier).
 - If a source patch rejected because the user is on a different Hermes version,
   follow [`ai/repair.md`](repair.md) to reconcile it.
 

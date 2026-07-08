@@ -182,12 +182,13 @@ The status bar and background edit Hermes-Agent's source code and rebuild the ap
 they're a separate tier. The AI installer handles them for you; to do it by hand,
 see [`advanced/README.md`](advanced/README.md).
 
-> **Reminder:** a Hermes-Agent update reverts these two (they're built into the app) — re-run the install to restore them (about a minute; the AI reconciles any version difference). See the **update table** above.
+> **Reminder:** a Hermes-Agent update reverts these two (they're built into the app, and updates rebuild it from a hard `git reset`). The seamless way to update is **`node update-hermes.mjs`** — it updates Hermes-Agent *and* re-applies the pack in one shot, so the app never comes back un-themed. (Prefer it over the in-app Update button.) If you did update in-app and came back stock, run `node update-hermes.mjs --no-update` to just re-apply. If anything fails, see [`ai/brokenupdatefix.md`](ai/brokenupdatefix.md).
 
 > **Heads-up (technical):** the advanced pieces need a Hermes-Agent desktop **dev
 > environment** (`apps/desktop` with dependencies installed), and Hermes-Agent must be
 > **fully quit** for the rebuild (on Windows the scripts detect a running Hermes-Agent and
-> refuse to build). Patches target `NousResearch/hermes-agent@8301654`; on a
+> refuse to build). Patches target the `BASE` commit in
+> [`advanced/apply-common.mjs`](advanced/apply-common.mjs) (currently `4d7f8ade`); on a
 > different version the AI reconciles them via [`ai/repair.md`](ai/repair.md).
 
 ---

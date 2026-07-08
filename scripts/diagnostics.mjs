@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
 
 const REPO = 'Elevatormusic/hermes-classic-gold-pack'
-const BASE = '830165473e0920c2baf8c2a6863976edb0c52943'
+const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
 
 /** Gather environment facts relevant to an install failure. */
 export function collect({ env = process.env, platform = process.platform } = {}) {

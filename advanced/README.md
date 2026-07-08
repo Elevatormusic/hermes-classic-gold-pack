@@ -8,18 +8,25 @@
 >   with its dependencies installed, plus **Node** and **Git**.
 > - **Hermes must be fully quit** during the build (`npm run pack`), or the
 >   file locks abort it.
-> - **A Hermes app update reverts these** — re-run the apply script afterwards.
-> - Patches are generated against `NousResearch/hermes-agent@8301654`. On a
->   different version they may not apply cleanly (see *If a patch rejects*).
+> - **A Hermes app update reverts BOTH tiers** (it rebuilds from a hard `git
+>   reset`). Re-apply afterwards — easiest is `node update-hermes.mjs`, which
+>   updates Hermes *and* re-applies the pack in one shot. If a re-apply ever
+>   fails, see [`ai/brokenupdatefix.md`](../ai/brokenupdatefix.md).
+> - Patches are generated against the `BASE` commit in
+>   [`apply-common.mjs`](apply-common.mjs) (currently `4d7f8ade`). On a different
+>   version they may not apply cleanly (see *If a patch rejects*).
 
 ## Status bar (TelemetryTape HUD)
 
-Adds the custom status bar (system CPU/mem, context usage, session/turn timers,
-caduceus rail glyphs). Touches 12 files under `apps/desktop/src/` including a new
-`app/shell/hooks/use-system-resources.ts`. It also lifts the chat composer to sit
+Adds the custom status bar (system RAM/VRAM, context usage, session/turn timers,
+caduceus rail glyphs). Touches 14 files: 12 under `apps/desktop/src/` plus an
+Electron IPC pair (`electron/main.cjs` + `electron/preload.cjs`) that reports RAM
+(via `os`) and VRAM (via `nvidia-smi`). It also lifts the chat composer to sit
 above the status bar and reserves that space in the thread's scroll clamp (via a
 single `--composer-dock-offset` variable) so the last message never slides under
-the prompt box.
+the prompt box, hides the composer's redundant model pill (the tape has its own
+selector), and makes the stock status bar follow the prompt window instead of
+spilling under the left sidebar.
 
 It does **not** relocate `<StatusbarControls>` in `app-shell.tsx` — the status
 bar renders in Hermes-Agent's stock slot (anchored to `<main>`). An earlier
@@ -46,15 +53,23 @@ node advanced/extras-caduceus/apply-caduceus.mjs --repo "<path-to>/hermes-agent"
 
 ## How the apply scripts work
 
-1. Warn if your `hermes-agent` HEAD isn't the base commit `8301654`.
+1. Warn if your `hermes-agent` HEAD isn't the `BASE` commit in `apply-common.mjs`.
 2. **Refuse to build while Hermes is running** — on Windows this is detected
    automatically (a running `Hermes.exe` locks `release/win-unpacked` and would
    fail the build); on other OSes you get a reminder to quit it. Pass `--no-build`
    to stage files without building.
 3. Back up every target file to `<file>.orig` (once).
-4. `git apply --3way` the shipped patch. **If it rejects**, fall back to copying
-   the full post-edit files from `<tier>/files/`.
-5. Unless `--no-build`, run `npm run pack` in `apps/desktop`, then write a pack
+4. **Reset the target paths to a clean base** (`git checkout -- …`) so a prior
+   install's modified/staged files don't force `git apply --3way` into
+   "does not match index" and the risky full-file fallback.
+5. `git apply --3way` the shipped patch. **If it rejects**, fall back per file:
+   copy the full post-edit file from `<tier>/files/` — **except** the
+   type-declaration files (`global.d.ts`, `types/hermes.ts`), which are instead
+   3-way-merged from a tiny additive patch in `<tier>/additive/`. A full copy of
+   those could drop a newer bridge API (e.g. `window.hermes.zoom`) on a diverged
+   version and break `tsc` (thanks @AnikaWilliams,
+   [#2](https://github.com/Elevatormusic/hermes-classic-gold-pack/issues/2)).
+6. Unless `--no-build`, run `npm run pack` in `apps/desktop`, then write a pack
    stamp to `HERMES_HOME/hermes-classic-gold-pack.json` (read by
    `scripts/diagnostics.mjs`) and tell you to relaunch.
 

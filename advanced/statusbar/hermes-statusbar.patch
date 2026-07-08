@@ -1,5 +1,70 @@
+diff --git a/apps/desktop/electron/main.cjs b/apps/desktop/electron/main.cjs
+index 69d5d5f..2ef5a27 100644
+--- a/apps/desktop/electron/main.cjs
++++ b/apps/desktop/electron/main.cjs
+@@ -212,6 +212,29 @@ if (IS_WSL && !REMOTE_DISPLAY_REASON && fs.existsSync('/dev/dxg')) {
+ 
+ ipcMain.handle('hermes:get-remote-display-reason', () => REMOTE_DISPLAY_REASON)
+ 
++// Classic Gold status bar: system RAM (always) + GPU VRAM (nvidia-smi, best-effort).
++// Returns bytes; the status-bar tape formats to GB. vram is null when no NVIDIA GPU.
++ipcMain.handle('hermes:system-resources', async () => {
++  const total = os.totalmem()
++  const ram = { total, used: total - os.freemem() }
++  let vram = null
++  try {
++    const out = execFileSync(
++      'nvidia-smi',
++      ['--query-gpu=memory.total,memory.used', '--format=csv,noheader,nounits'],
++      { timeout: 2000, windowsHide: true }
++    ).toString()
++    const row = out.split('\n').map(l => l.trim()).find(Boolean)
++    if (row) {
++      const [t, u] = row.split(',').map(s => Number(s.trim()) * 1024 * 1024) // MiB -> bytes
++      if (Number.isFinite(t) && Number.isFinite(u) && t > 0) vram = { total: t, used: u }
++    }
++  } catch {
++    // no nvidia-smi / no NVIDIA GPU — leave vram null (RAM still shows).
++  }
++  return { ram, vram }
++})
++
+ // Keep the renderer running at full speed while the window is in the background
+ // or occluded. The chat transcript streams to screen through a
+ // requestAnimationFrame-gated flush; Chromium pauses rAF (and clamps timers)
+diff --git a/apps/desktop/electron/preload.cjs b/apps/desktop/electron/preload.cjs
+index 0a9c4fd..c84f46f 100644
+--- a/apps/desktop/electron/preload.cjs
++++ b/apps/desktop/electron/preload.cjs
+@@ -208,6 +208,7 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
+   },
+   getVersion: () => ipcRenderer.invoke('hermes:version'),
+   getRemoteDisplayReason: () => ipcRenderer.invoke('hermes:get-remote-display-reason'),
++  getSystemResources: () => ipcRenderer.invoke('hermes:system-resources'),
+   uninstall: {
+     summary: () => ipcRenderer.invoke('hermes:uninstall:summary'),
+     run: mode => ipcRenderer.invoke('hermes:uninstall:run', { mode })
+diff --git a/apps/desktop/src/app/chat/composer/controls.tsx b/apps/desktop/src/app/chat/composer/controls.tsx
+index 8bc7abc..2ffa837 100644
+--- a/apps/desktop/src/app/chat/composer/controls.tsx
++++ b/apps/desktop/src/app/chat/composer/controls.tsx
+@@ -89,7 +89,13 @@ export function ComposerControls({
+ 
+   return (
+     <div className="ml-auto flex shrink-0 items-center gap-(--composer-control-gap)">
+-      <ModelPill compact={compactModelPill} disabled={disabled} model={state.model} />
++      {/* Classic Gold: the status tape carries its own model selector, so the
++          composer's model pill is redundant whenever the tape is on-screen. It's
++          hidden via CSS at the tape's >=880px breakpoint (see styles.css) and kept
++          as a fallback on narrow windows / pop-outs where the tape isn't shown. */}
++      <span className="contents" data-slot="composer-model-pill">
++        <ModelPill compact={compactModelPill} disabled={disabled} model={state.model} />
++      </span>
+       {/* While the agent runs and the user is typing, steer takes over the mic's
+           slot rather than crowding the row with an extra button. */}
+       {canSteer ? (
 diff --git a/apps/desktop/src/app/chat/composer/index.tsx b/apps/desktop/src/app/chat/composer/index.tsx
-index 1f5df46..c335101 100644
+index 1f5df46..7d94302 100644
 --- a/apps/desktop/src/app/chat/composer/index.tsx
 +++ b/apps/desktop/src/app/chat/composer/index.tsx
 @@ -811,7 +811,7 @@ export function ChatBar({
@@ -7,7 +72,7 @@ index 1f5df46..c335101 100644
                  // 5px transparent grab margin around it — drag that to move it.
                  'fixed w-[var(--composer-popout-width)] max-w-[calc(100vw-1.5rem)] bg-transparent p-[5px]'
 -              : 'absolute bottom-0 left-1/2 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 pt-2 pb-[var(--composer-shell-pad-block-end)]',
-+              : 'absolute bottom-[var(--composer-dock-offset)] left-1/2 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 pt-2 pb-1',
++              : 'absolute bottom-[var(--composer-dock-offset)] left-1/2 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 pt-2 pb-[var(--composer-shell-pad-block-end)]',
              dragging && 'cursor-grabbing select-none touch-none'
            )}
            data-drag-active={dragActive ? '' : undefined}
@@ -16,7 +81,7 @@ index 1f5df46..c335101 100644
      <div
        className={cn(
 -        'group/composer absolute bottom-0 left-1/2 z-30 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 rounded-2xl pt-2 pb-[var(--composer-shell-pad-block-end)]',
-+        'group/composer absolute bottom-[var(--composer-dock-offset)] left-1/2 z-30 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 rounded-2xl pt-2 pb-1',
++        'group/composer absolute bottom-[var(--composer-dock-offset)] left-1/2 z-30 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 rounded-2xl pt-2 pb-[var(--composer-shell-pad-block-end)]',
          'bg-linear-to-b from-transparent to-background/55'
        )}
        data-slot="composer-root"
@@ -183,62 +248,11 @@ index 753c389..055aa76 100644
        requestGateway,
        sessionStartedAt,
        showYoloToggle,
-diff --git a/apps/desktop/src/app/shell/hooks/use-system-resources.ts b/apps/desktop/src/app/shell/hooks/use-system-resources.ts
-new file mode 100644
-index 0000000..111986b
---- /dev/null
-+++ b/apps/desktop/src/app/shell/hooks/use-system-resources.ts
-@@ -0,0 +1,45 @@
-+import { useEffect, useState } from 'react'
-+
-+export interface SystemResources {
-+  ram: { total: number; used: number }
-+  vram: { total: number; used: number } | null
-+}
-+
-+// Polls the Electron main process for system RAM (Node `os`) + GPU VRAM
-+// (`nvidia-smi`, best-effort). Always on — the status-bar tape shows it whether
-+// or not a turn is running. Keeps the last reading through a transient failure.
-+export function useSystemResources(intervalMs = 2500): SystemResources | null {
-+  const [resources, setResources] = useState<SystemResources | null>(null)
-+
-+  useEffect(() => {
-+    const read = window.hermesDesktop?.getSystemResources
-+
-+    if (!read) {
-+      return
-+    }
-+
-+    let cancelled = false
-+
-+    const tick = async () => {
-+      try {
-+        const next = await read()
-+
-+        if (!cancelled) {
-+          setResources(next)
-+        }
-+      } catch {
-+        // Keep the last reading through a transient IPC/nvidia-smi hiccup.
-+      }
-+    }
-+
-+    void tick()
-+    const timer = window.setInterval(() => void tick(), intervalMs)
-+
-+    return () => {
-+      cancelled = true
-+      window.clearInterval(timer)
-+    }
-+  }, [intervalMs])
-+
-+  return resources
-+}
 diff --git a/apps/desktop/src/app/shell/statusbar-controls.tsx b/apps/desktop/src/app/shell/statusbar-controls.tsx
-index 9a9f098..39bd0a7 100644
+index 9a9f098..9259694 100644
 --- a/apps/desktop/src/app/shell/statusbar-controls.tsx
 +++ b/apps/desktop/src/app/shell/statusbar-controls.tsx
-@@ -1,14 +1,69 @@
+@@ -1,14 +1,113 @@
 -import { type ComponentProps, type ReactNode, useState } from 'react'
 +﻿import { useStore } from '@nanostores/react'
 +import { useQueryClient } from '@tanstack/react-query'
@@ -249,7 +263,6 @@ index 9a9f098..39bd0a7 100644
 +import { useGatewayRequest } from '@/app/gateway/hooks/use-gateway-request'
 +import { useModelControls } from '@/app/session/hooks/use-model-controls'
 +import { ContextUsagePanel } from '@/app/shell/context-usage-panel'
-+import { useSystemResources } from '@/app/shell/hooks/use-system-resources'
 +import { ModelMenuCloseContext, ModelMenuPanel } from '@/app/shell/model-menu-panel'
 +import {
 +  DropdownMenu,
@@ -270,6 +283,7 @@ index 9a9f098..39bd0a7 100644
 +import { LiveDuration } from '@/lib/statusbar'
 +import { normalize } from '@/lib/text'
  import { cn } from '@/lib/utils'
++import { $panesFlipped, $sidebarOpen, $sidebarWidth } from '@/store/layout'
 +import { setModelPreset } from '@/store/model-presets'
 +import { notifyError } from '@/store/notifications'
 +import {
@@ -285,6 +299,50 @@ index 9a9f098..39bd0a7 100644
 +  $turnStartedAt,
 +  setCurrentReasoningEffort
 +} from '@/store/session'
++
++// Folded in from the former use-system-resources.ts hook. Keeping it in this
++// tracked file (rather than a separate new file) means a Hermes-Agent update
++// reverts it cleanly instead of orphaning a file that breaks the rebuild. See #1.
++interface SystemResources {
++  ram: { total: number; used: number }
++  vram: { total: number; used: number } | null
++}
++
++function useSystemResources(intervalMs = 2500): SystemResources | null {
++  const [resources, setResources] = useState<SystemResources | null>(null)
++
++  useEffect(() => {
++    const read = window.hermesDesktop?.getSystemResources
++
++    if (!read) {
++      return
++    }
++
++    let cancelled = false
++
++    const tick = async () => {
++      try {
++        const next = await read()
++
++        if (!cancelled) {
++          setResources(next)
++        }
++      } catch {
++        // keep the last reading through a transient nvidia-smi / IPC hiccup
++      }
++    }
++
++    void tick()
++    const timer = window.setInterval(() => void tick(), intervalMs)
++
++    return () => {
++      cancelled = true
++      window.clearInterval(timer)
++    }
++  }, [intervalMs])
++
++  return resources
++}
 +
 +const SYMBOLS = {
 +  caduceus: '\u2695',
@@ -313,7 +371,7 @@ index 9a9f098..39bd0a7 100644
  
  export interface StatusbarMenuItem {
    id: string
-@@ -34,7 +89,6 @@ export interface StatusbarItem {
+@@ -34,7 +133,6 @@ export interface StatusbarItem {
    href?: string
    menuAlign?: 'center' | 'end' | 'start'
    menuClassName?: string
@@ -321,7 +379,7 @@ index 9a9f098..39bd0a7 100644
    menuContent?: ((close: () => void) => ReactNode) | ReactNode
    menuItems?: readonly StatusbarMenuItem[]
    onSelect?: (modifiers: StatusbarSelectModifiers) => void
-@@ -55,30 +109,570 @@ interface StatusbarControlsProps extends ComponentProps<'footer'> {
+@@ -55,30 +153,583 @@ interface StatusbarControlsProps extends ComponentProps<'footer'> {
    items?: readonly StatusbarItem[]
  }
  
@@ -715,8 +773,8 @@ index 9a9f098..39bd0a7 100644
 +      className="pointer-events-none absolute left-1/2 z-10 flex h-7 -translate-x-1/2 items-center overflow-hidden rounded-[3px] border border-[#F2B705]/55 bg-[#0D0D0D]/98 px-3 text-[12.5px]/none font-semibold text-[#CFC39D] shadow-[inset_0_0_0_1px_rgba(115,90,16,0.30),0_6px_14px_rgba(0,0,0,0.22)]"
 +      style={{
 +        bottom: 'calc(100% + 0.15rem)',
-+        left: 'calc(50% + var(--pane-chat-sidebar-width, 0px) / 2)',
-+        maxWidth: 'calc(100% - var(--pane-chat-sidebar-width, 0px) - 2rem)',
++        left: '50%',
++        maxWidth: 'calc(100% - 2rem)',
 +        width: 'fit-content'
 +      }}
 +      title={detailTitle}
@@ -867,17 +925,30 @@ index 9a9f098..39bd0a7 100644
 +
 +export function StatusbarControls({ className, leftItems = [], items = [], style, ...props }: StatusbarControlsProps) {
    const navigate = useNavigate()
++  const sidebarWidth = useStore($sidebarWidth)
++  const sidebarOpen = useStore($sidebarOpen)
++  const panesFlipped = useStore($panesFlipped)
++  // Start the stock status bar at the chat pane's left edge so it follows the
++  // prompt window instead of spilling under the left menu. 0 when the sidebar is
++  // collapsed or the panes are flipped (the left pane isn't the chat sidebar).
++  // (--pane-chat-sidebar-width only exists inside PaneShell; this footer is a
++  // sibling of it, so we read the width from the layout store instead.)
++  const leftInset = !panesFlipped && sidebarOpen ? sidebarWidth : 0
  
    return (
      <footer
        className={cn(
 -        'flex h-5 shrink-0 items-stretch justify-between gap-2 border-t border-(--ui-stroke-tertiary) bg-(--ui-sidebar-surface-background) px-1 py-0 text-(--ui-text-tertiary) [-webkit-app-region:no-drag]',
-+        'absolute inset-x-0 bottom-0 z-[31] flex h-8 shrink-0 items-center justify-between gap-2 border-t border-[#735A10]/45 bg-[#0D0D0D]/96 px-1 py-0 text-(--ui-text-tertiary) shadow-[0_-8px_18px_rgba(0,0,0,0.22)] [-webkit-app-region:no-drag]',
++        // Classic Gold: start at the chat-sidebar's right edge (left set inline
++        // below) so the stock status bar follows the prompt window instead of
++        // spilling under the left menu. Collapses to full width when no sidebar.
++        'absolute right-0 bottom-0 z-[31] flex h-8 shrink-0 items-center justify-between gap-2 border-t border-[#735A10]/45 bg-[#0D0D0D]/96 px-1 py-0 text-(--ui-text-tertiary) shadow-[0_-8px_18px_rgba(0,0,0,0.22)] [-webkit-app-region:no-drag]',
          className
        )}
        data-slot="statusbar"
 +      style={{
 +        fontFamily: '"Cascadia Code", "Cascadia Mono", "JetBrains Mono", Consolas, monospace',
++        left: `${leftInset}px`,
 +        ...style
 +      }}
        {...props}
@@ -900,7 +971,7 @@ index 9a9f098..39bd0a7 100644
          {items
            .filter(item => !item.hidden)
            .map(item => (
-@@ -101,11 +695,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
+@@ -101,11 +752,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
    )
  
    if (item.variant === 'menu' && (item.menuContent || (item.menuItems && item.menuItems.length > 0))) {
@@ -912,7 +983,7 @@ index 9a9f098..39bd0a7 100644
      const trigger = (
        <DropdownMenuTrigger asChild>
          <button className={cn(STATUSBAR_ACTION_CLASS, item.className)} disabled={item.disabled} type="button">
-@@ -179,7 +768,7 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
+@@ -179,7 +825,7 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
        <Tip label={item.title}>
          <div
            className={cn(
@@ -921,7 +992,7 @@ index 9a9f098..39bd0a7 100644
              item.className
            )}
          >
-@@ -218,3 +807,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
+@@ -218,3 +864,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
      </Tip>
    )
  }
@@ -955,7 +1026,7 @@ index 3416c22..fb03829 100644
        <div className="pointer-events-auto rounded-xl border border-primary/30 bg-(--ui-chat-surface-background) px-3 py-2 shadow-lg backdrop-blur-xl [-webkit-backdrop-filter:blur(1rem)]">
          <div className="flex min-w-0 items-center gap-2 text-sm text-primary">
 diff --git a/apps/desktop/src/global.d.ts b/apps/desktop/src/global.d.ts
-index 870d331..46856db 100644
+index f9c5e34..dc0a5e1 100644
 --- a/apps/desktop/src/global.d.ts
 +++ b/apps/desktop/src/global.d.ts
 @@ -69,6 +69,10 @@ declare global {
@@ -970,7 +1041,7 @@ index 870d331..46856db 100644
        saveImageBuffer: (data: ArrayBuffer | Uint8Array, ext: string) => Promise<string>
        saveClipboardImage: () => Promise<string>
 diff --git a/apps/desktop/src/styles.css b/apps/desktop/src/styles.css
-index e5477bb..e72aa47 100644
+index e5477bb..b2f6ad4 100644
 --- a/apps/desktop/src/styles.css
 +++ b/apps/desktop/src/styles.css
 @@ -333,7 +333,7 @@
@@ -999,7 +1070,7 @@ index e5477bb..e72aa47 100644
      );
      --vsq: min(0.5vh, 0.5vw);
      --image-preview-max-width: 34rem;
-@@ -1033,7 +1037,7 @@ text-* variant utilities. */ .btn-arc {
+@@ -1033,10 +1037,20 @@ text-* variant utilities. */ .btn-arc {
  [data-slot='aui_intro'] {
    align-items: center;
    justify-content: center;
@@ -1008,27 +1079,34 @@ index e5477bb..e72aa47 100644
    text-align: center;
  }
  
++/* Classic Gold: the status tape carries the model selector, so hide the
++   composer's redundant model pill whenever the tape is on-screen. 880px matches
++   TelemetryTape's own hide breakpoint (window.innerWidth < 880 → tape hidden),
++   so on narrow windows / pop-outs the composer pill stays as a fallback. */
++@media (min-width: 880px) {
++  [data-slot='composer-model-pill'] {
++    display: none;
++  }
++}
++
+ [data-slot='aui_intro'] > div {
+   max-width: min(var(--composer-width), 82vw);
+ }
 diff --git a/apps/desktop/src/types/hermes.ts b/apps/desktop/src/types/hermes.ts
-index 63ac7f9..ba7001a 100644
+index 9133fb4..5ff3be3 100644
 --- a/apps/desktop/src/types/hermes.ts
 +++ b/apps/desktop/src/types/hermes.ts
-@@ -413,13 +413,19 @@ export interface SessionRuntimeInfo {
- }
- 
- export interface UsageStats {
-+  api_duration_s?: number
-   calls: number
-   context_max?: number
-   context_percent?: number
-   context_used?: number
-   cost_usd?: number
+@@ -422,6 +422,13 @@ export interface UsageStats {
    input: number
+   output: number
+   total: number
++  // Classic Gold status bar telemetry (throughput / phase / last-turn deltas).
++  api_duration_s?: number
 +  last_input?: number
 +  last_output?: number
 +  last_total?: number
-   output: number
 +  phase?: string
 +  tokens_per_second?: number
-   total: number
  }
  
+ /** One graph node in the star map (learned skill or memory chunk). */

@@ -1041,6 +1041,16 @@ text-* variant utilities. */ .btn-arc {
   text-align: center;
 }
 
+/* Classic Gold: the status tape carries the model selector, so hide the
+   composer's redundant model pill whenever the tape is on-screen. 880px matches
+   TelemetryTape's own hide breakpoint (window.innerWidth < 880 → tape hidden),
+   so on narrow windows / pop-outs the composer pill stays as a fallback. */
+@media (min-width: 880px) {
+  [data-slot='composer-model-pill'] {
+    display: none;
+  }
+}
+
 [data-slot='aui_intro'] > div {
   max-width: min(var(--composer-width), 82vw);
 }

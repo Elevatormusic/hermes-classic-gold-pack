@@ -6,8 +6,18 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
 
-const BASE = '830165473e0920c2baf8c2a6863976edb0c52943'
+const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
 const COMMON_DIR = dirname(fileURLToPath(import.meta.url)) // repo/advanced
+
+// Type-declaration files must NEVER be full-file-overwritten from the fallback:
+// the shipped base version can predate a newer renderer bridge API (e.g.
+// window.hermes.zoom) on a diverged Hermes, and copying it over would drop that
+// API and break `tsc`. Instead we 3-way-merge a tiny additive patch per file so
+// the pack's declarations are added WITHOUT clobbering the user's. (Issue #2.)
+const ADDITIVE_ONLY = {
+  'apps/desktop/src/global.d.ts': 'additive/global.d.ts.patch',
+  'apps/desktop/src/types/hermes.ts': 'additive/types-hermes.ts.patch'
+}
 
 function packVersion() {
   try {
@@ -120,12 +130,38 @@ export function applyTier({ scriptDir, patchName, tier, label }) {
     if (existsSync(target) && !existsSync(target + '.orig')) copyFileSync(target, target + '.orig')
   }
 
-  // 2) patch, else copy
+  // 2) reset the target paths to a clean base first. A prior install leaves
+  //    these files modified/staged; `git apply --3way` then reports "does not
+  //    match index" and forces the risky full-file fallback even when a clean
+  //    3-way would have worked. Resetting lets more installs take the surgical
+  //    path. (Issue #2, gotcha 2.) Originals are already backed up as .orig
+  //    above. Best-effort — ignore paths git doesn't track.
+  const tracked = rels.filter(rel => existsSync(join(repo, rel)))
+  if (tracked.length) spawnSync('git', ['-C', repo, 'checkout', '--', ...tracked], { stdio: 'ignore' })
+
+  // 3) patch, else copy (per file, with .d.ts safety)
   const patch = join(scriptDir, patchName)
   const r = spawnSync('git', ['-C', repo, 'apply', '--3way', '--whitespace=nowarn', patch], { stdio: 'inherit' })
   if (r.status !== 0) {
-    console.warn('! git apply failed; copying full files instead.')
+    console.warn('! git apply failed; falling back to per-file copy.')
     for (const rel of rels) {
+      const additive = ADDITIVE_ONLY[rel]
+      if (additive) {
+        // Declaration file — 3-way-merge ONLY our additions; never overwrite
+        // (a full copy could drop a newer bridge API and break tsc — issue #2).
+        const ap = spawnSync(
+          'git',
+          ['-C', repo, 'apply', '--3way', '--whitespace=nowarn', join(scriptDir, additive)],
+          { stdio: 'inherit' }
+        )
+        if (ap.status !== 0) {
+          console.warn(
+            `! Could not merge ${rel} additively on your version — NOT overwriting it.\n` +
+              '  Add the declarations by hand or run the AI repair prompt. See ai/brokenupdatefix.md.'
+          )
+        }
+        continue
+      }
       const target = join(repo, rel)
       mkdirSync(dirname(target), { recursive: true })
       copyFileSync(join(fallbackRoot, rel), target)

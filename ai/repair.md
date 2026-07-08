@@ -34,6 +34,17 @@ THEN build (Hermes fully quit):
   cd apps/desktop && npm run pack
   Relaunch Hermes to verify.
 
+VERIFY AND SELF-HEAL (do this yourself before asking me anything):
+  - Read the `npm run pack` output for TypeScript/build errors; if it fails,
+    read the error, fix the merge, rebuild. Repeat up to 3 times.
+  - After relaunch, run `node scripts/diagnostics.mjs --logs` and read
+    errors.log / desktop.log for renderer errors (e.g. ERR_FILE_NOT_FOUND, a
+    stack trace, "Unexpected end of input"). A blank window almost always shows
+    up there. Fix and rebuild rather than asking me.
+  - Only if it's a purely VISUAL problem with clean logs, ask me — in ONE
+    message — for a screenshot of the affected area AND the DevTools console
+    (Ctrl/Cmd+Shift+I → Console). Then finish the fix.
+
 PLAIN-CHAT FALLBACK: if you can't read my files directly, ask me to paste each
 current target file; return the merged version for me to save.
 ```

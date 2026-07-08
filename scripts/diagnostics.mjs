@@ -41,6 +41,41 @@ export function collect({ env = process.env, platform = process.platform } = {})
   }
 }
 
+// Hermes log files worth reading on a failure, most-diagnostic first.
+const LOG_PRIORITY = ['errors.log', 'desktop.log', 'agent.log', 'gateway.log', 'gui.log']
+
+/**
+ * Collect the tail of Hermes' relevant log files for self-diagnosis.
+ * @param {string} home  HERMES_HOME
+ * @param {{maxLines?: number}} [opts]
+ * @returns {{name: string, path: string, tail: string}[]}
+ */
+export function collectLogs(home, { maxLines = 40 } = {}) {
+  if (!home) return []
+  const dir = join(home, 'logs')
+  if (!existsSync(dir)) return []
+  const out = []
+  for (const name of LOG_PRIORITY) {
+    const p = join(dir, name)
+    if (!existsSync(p)) continue
+    let tail = ''
+    try {
+      const lines = readFileSync(p, 'utf8').split(/\r?\n/)
+      tail = lines.slice(-maxLines).join('\n').trim()
+    } catch {
+      continue
+    }
+    if (tail) out.push({ name, path: p, tail })
+  }
+  return out
+}
+
+/** Render collected logs for the console. Pure. */
+export function formatLogs(logs) {
+  if (!logs.length) return '(no Hermes logs found)'
+  return logs.map((l) => `── ${l.name} (${l.path}) ──\n${l.tail}`).join('\n\n')
+}
+
 /** Render diagnostics as a Markdown block. Pure. */
 export function formatDiagnostics(info) {
   return [
@@ -76,8 +111,14 @@ const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv
 if (isMain) {
   const errIdx = process.argv.indexOf('--error')
   const error = errIdx !== -1 ? process.argv[errIdx + 1] : undefined
+  const wantLogs = process.argv.includes('--logs')
   const info = collect()
   console.log(formatDiagnostics(info))
+  if (wantLogs) {
+    console.log('\n### Recent Hermes logs  (review before sharing — may contain prompts/paths)')
+    console.log(formatLogs(collectLogs(info.hermesHome)))
+  }
   console.log('\nReport this install issue (review before submitting):')
   console.log(buildIssueUrl(info, { title: 'Install failure', error }))
+  if (!wantLogs) console.log('(add --logs to also print recent Hermes log tails for diagnosis)')
 }

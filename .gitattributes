@@ -8,3 +8,5 @@
 
 # Binary assets: never touch.
 *.webp binary
+*.gif binary
+*.png binary

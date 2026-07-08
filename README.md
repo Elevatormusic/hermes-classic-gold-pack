@@ -9,6 +9,18 @@ The theme and pets install in ~30 seconds and work on any machine. The status
 bar and extras edit the desktop app's source, so they're a separate, honest
 "advanced" tier (see the caveats below).
 
+## Preview
+
+![Classic Hermes gold theme — dark & light palette](docs/theme-palette.png)
+
+<p>
+  <img src="docs/noir-neko-idle.gif" alt="Noir Neko idle animation" height="180">
+  &nbsp;&nbsp;&nbsp;
+  <img src="docs/noir-neko-ascii-idle.gif" alt="Noir Neko ASCII idle animation" height="180">
+</p>
+
+<sub>Left: <b>Noir Neko</b>. Right: <b>Noir Neko ASCII Fine</b>. (Idle animations, shown on the theme's dark background.)</sub>
+
 > **Note on scope:** this pack targets the Hermes *desktop* app. The core
 > installer is cross-platform (Windows/macOS/Linux); it has been verified on
 > Windows. macOS/Linux path handling is best-effort — issues/PRs welcome.
@@ -58,10 +70,17 @@ Prefer to let an AI handle everything — including reconciling the advanced
 patches to your Hermes version? Paste [`ai/install.md`](ai/install.md) into an
 **agentic** coding assistant (Claude Code, Cursor, Codex CLI — one that can run
 shell commands and edit files). It runs the core install, offers the advanced
-tiers, falls back to [`ai/repair.md`](ai/repair.md) if a patch rejects, and on
-an unrecoverable failure runs `scripts/diagnostics.mjs` to produce a pre-filled
-issue link for you to review and submit. Plain chat assistants (no tools) will
-instead hand you the exact commands.
+tiers, and falls back to [`ai/repair.md`](ai/repair.md) if a patch rejects.
+
+It's built to be hands-off: when something fails it **diagnoses itself first** —
+reads its own build/patch output and the Hermes logs via
+`node scripts/diagnostics.mjs --logs` (errors.log, desktop.log, agent.log,
+gateway.log), inspects any `.rej` files, fixes the likely cause, rebuilds, and
+re-checks the logs — looping before it bothers you. It only asks you as a **last
+resort, once**, and for genuinely visual problems it requests a specific
+screenshot (plus the DevTools console) with exact steps. Only if it truly can't
+fix it does it hand you a pre-filled issue link to review and submit. Plain chat
+assistants (no tools) instead hand you the exact commands.
 
 ## Advanced: status bar + caduceus extras
 
@@ -97,8 +116,10 @@ node advanced/extras-caduceus/apply-caduceus.mjs --repo "<path-to>/hermes-agent"
 ## Reporting problems
 
 Run `node scripts/diagnostics.mjs` and open the pre-filled issue URL it prints
-(or use **Issues → New → "Install failure"**). Review before submitting — it
-includes your OS, Node version, and Hermes commit, nothing else.
+(or use **Issues → New → "Install failure"**). Review before submitting — the
+issue body includes your OS, Node version, and Hermes commit, nothing else. Add
+`--logs` to also print recent Hermes log tails locally for diagnosis (those are
+**not** put in the issue URL — share them only if you choose, after reviewing).
 
 ## Credits & license
 

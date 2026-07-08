@@ -14,6 +14,7 @@ export function collect({ env = process.env, platform = process.platform } = {})
   const hermesHome = resolveHermesHome({ env, platform })
   let agentHead = null
   let packStamp = null
+  let packApplied = null
   if (hermesHome) {
     const repo = join(hermesHome, 'hermes-agent')
     try {
@@ -29,6 +30,16 @@ export function collect({ env = process.env, platform = process.platform } = {})
         // unreadable — leave null
       }
     }
+    // This pack's own stamp (written by the advanced apply scripts) — tells us
+    // which pieces of the pack were applied, distinct from Hermes' build stamp.
+    const packFile = join(hermesHome, 'hermes-classic-gold-pack.json')
+    if (existsSync(packFile)) {
+      try {
+        packApplied = readFileSync(packFile, 'utf8').trim().replace(/\s+/g, ' ')
+      } catch {
+        // unreadable — leave null
+      }
+    }
   }
   return {
     platform,
@@ -38,6 +49,7 @@ export function collect({ env = process.env, platform = process.platform } = {})
     agentHead,
     onBase: agentHead === BASE,
     packStamp,
+    packApplied,
   }
 }
 
@@ -85,7 +97,8 @@ export function formatDiagnostics(info) {
     `- HERMES_HOME: ${info.hermesHome ?? '(not found)'}`,
     `- hermes-agent HEAD: ${info.agentHead ?? '(unknown)'}`,
     `- on base ${BASE.slice(0, 7)}: ${info.onBase ? 'yes' : 'no'}`,
-    info.packStamp ? `- build stamp: ${info.packStamp}` : null,
+    info.packApplied ? `- pack applied: ${info.packApplied}` : '- pack applied: (core only — no advanced tier stamp)',
+    info.packStamp ? `- hermes build stamp: ${info.packStamp}` : null,
   ]
     .filter(Boolean)
     .join('\n')

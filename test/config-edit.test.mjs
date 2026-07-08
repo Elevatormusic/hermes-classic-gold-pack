@@ -36,6 +36,20 @@ test('throws when there is no display block at all', () => {
   assert.throws(() => activatePetInConfig('model:\n  default: x\n', 'p'), /display/)
 })
 
-test('throws when display exists but has no pet block', () => {
-  assert.throws(() => activatePetInConfig('display:\n  compact: false\n', 'p'), /pet/)
+test('creates a pet block when display exists but has none (clean config, issue #1)', () => {
+  const text = ['model:', '  default: x', 'display:', '  compact: false', 'stt:', '  enabled: true', ''].join('\n')
+  const out = activatePetInConfig(text, 'noir-neko-ascii-fine')
+  assert.match(out, /^ {2}pet:$/m)
+  assert.match(out, /^ {4}enabled: true$/m)
+  assert.match(out, /^ {4}slug: noir-neko-ascii-fine$/m)
+  assert.match(out, /^ {2}compact: false$/m) // sibling preserved
+  assert.match(out, /^stt:$/m) // block after display preserved
+  // valid single pet block (no duplicate keys)
+  assert.equal((out.match(/^ {2}pet:$/gm) || []).length, 1)
+})
+
+test('creates pet block even when display is the last block with no children', () => {
+  const out = activatePetInConfig('model:\n  x: 1\ndisplay:\n', 'noir-neko')
+  assert.match(out, /^ {2}pet:$/m)
+  assert.match(out, /^ {4}slug: noir-neko$/m)
 })

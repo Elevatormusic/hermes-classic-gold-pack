@@ -19,9 +19,18 @@ node install.mjs --activate noir-neko-ascii-fine
 ```
 
 Omit `--activate` to install both pets without changing the user's current pet.
-Then tell the user the one manual **theme** step: open Hermes Desktop →
-`Ctrl/Cmd+Shift+I` → **Console** tab → paste the contents of
+(`install.mjs` now creates the `display.pet` block if the config doesn't have one
+yet, so `--activate` works on a brand-new Hermes.)
+
+Then hand the user the **theme** step — this one is **human-only, by design**:
+open Hermes Desktop → `Ctrl/Cmd+Shift+I` → **Console** tab → paste the contents of
 `theme/install-theme.js` → Enter.
+
+> **Do not try to automate the theme.** It writes browser `localStorage`; the only
+> ways to do it "unattended" are injecting over the DevTools/remote-debugging
+> protocol or editing Chromium's leveldb — both are fragile and (rightly) trip
+> code-execution approval gates. Just print the snippet's path and let the user
+> paste it. Wait for them to confirm, then continue.
 
 **3. Offer the advanced pieces.** Ask the user whether they also want the custom
 **status bar** and/or the **caduceus extras** (loader + backdrop + wordmark). If

@@ -37,11 +37,16 @@ node advanced/extras-caduceus/apply-caduceus.mjs --repo "<path-to>/hermes-agent"
 ## How the apply scripts work
 
 1. Warn if your `hermes-agent` HEAD isn't the base commit `8301654`.
-2. Back up every target file to `<file>.orig` (once).
-3. `git apply --3way` the shipped patch. **If it rejects**, fall back to copying
+2. **Refuse to build while Hermes is running** — on Windows this is detected
+   automatically (a running `Hermes.exe` locks `release/win-unpacked` and would
+   fail the build); on other OSes you get a reminder to quit it. Pass `--no-build`
+   to stage files without building.
+3. Back up every target file to `<file>.orig` (once).
+4. `git apply --3way` the shipped patch. **If it rejects**, fall back to copying
    the full post-edit files from `<tier>/files/`.
-4. Unless `--no-build`, run `npm run pack` in `apps/desktop` (Hermes must be
-   quit), then tell you to relaunch.
+5. Unless `--no-build`, run `npm run pack` in `apps/desktop`, then write a pack
+   stamp to `HERMES_HOME/hermes-classic-gold-pack.json` (read by
+   `scripts/diagnostics.mjs`) and tell you to relaunch.
 
 ## If a patch rejects (different Hermes version)
 

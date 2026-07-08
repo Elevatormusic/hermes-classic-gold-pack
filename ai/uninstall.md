@@ -6,6 +6,11 @@ assistant here ("read `ai/uninstall.md`, ask what to remove, follow it").
 > **You need shell + file access.** If you can't run commands, give the user the
 > exact steps to run themselves. Confirm before deleting anything.
 
+> **Brief the user first.** For each part they choose, say in one line what you'll
+> do and that it's reversible (e.g. "I'll delete the two pet folders and restore
+> your previous pet from the backup") — then do it and report what changed. Don't
+> make them guess.
+
 ## Step 1 — Ask what to remove
 
 Ask the user which parts to uninstall (they may pick more than one):

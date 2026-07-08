@@ -5,6 +5,10 @@ Help the user file a good bug report for the **Hermes "Classic Gold" pack**.
 > **You need shell + file access.** If you can't run commands, tell the user to
 > run `node scripts/diagnostics.mjs --logs` themselves and open the link it prints.
 
+> **Tell the user what you're doing:** you'll gather diagnostics **locally** (nothing
+> leaves their machine), try once more to fix it, and then hand them a pre-filled
+> issue link to **review** — you never file anything yourself.
+
 ## Steps
 
 **1. Gather diagnostics** from inside the repo:

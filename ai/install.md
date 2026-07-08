@@ -13,6 +13,38 @@ that assistant, do exactly what's below.
 > **end your session** — so for those two steps, either run them dead last, or hand
 > the user the exact commands to run after you're done. Detect this before acting.
 
+## First — brief the user (before you touch anything)
+
+Open with a short, plain-language summary so the user knows the whole plan up
+front. Don't make them wonder what you're doing or discover it as you go — proactively
+telling them what will happen is what makes this feel trustworthy. Relay something
+like this (trim to their choices), then narrate each step briefly as you run it:
+
+> **Here's the plan.** Everything I do is backed up and reversible, and I only run
+> this repo's own scripts — no downloads and no network calls (the repo's
+> `SECURITY.md` confirms this, and I've read the scripts).
+>
+> 1. **Pets** (~10 seconds, safe to do while Hermes-Agent is open): I'll copy in two
+>    pets. If you want one active, I'll set it — after backing up your config.
+> 2. **Gold theme** (~30 seconds): I'll apply it for you. This is localStorage-only,
+>    so the installer **restarts Hermes-Agent once** to set it, then reopens it.
+> 3. **Status bar + background** (optional, a few minutes): these are compiled *into*
+>    the app, so applying them **rebuilds Hermes-Agent and needs it fully closed**
+>    during the build. I'll ask before doing these — and ask before closing anything.
+>
+> I'll check with you before editing your config, applying the two advanced pieces,
+> or closing Hermes-Agent, and I'll tell you exactly what changed after each step.
+
+**Set expectations for the known, by-design behaviors** (so they don't read as
+surprises you had to figure out):
+
+- On a brand-new Hermes-Agent with no pet ever set, `install.mjs --activate` **creates**
+  the pet config block for you — that's expected, not an error.
+- The theme has **no file/CLI** — a one-time restart (or a manual console paste) is
+  the only way; that's why it's a helper, not a plain file copy.
+- The advanced patches target one Hermes-Agent version; on a different one the scripts
+  fall back cleanly and the AI reconciles the rest. Expected, handled.
+
 ## Steps
 
 **1. Get the repo.** Clone `https://github.com/Elevatormusic/hermes-classic-gold-pack`

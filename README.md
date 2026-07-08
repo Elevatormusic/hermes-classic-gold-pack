@@ -48,8 +48,8 @@ piece on its own.
 
 The `hermes-classic-gold` desktop theme — warm gold borders, cornsilk text, in
 both **light and dark**. The AI installer sets it for you (`node theme/apply-theme.mjs`);
-it lives in the app's localStorage, so it needs no rebuild, works on any Hermes-Agent
-version, and **stays put when Hermes-Agent updates**.
+it lives in the app's localStorage, so it needs no rebuild and works on any
+Hermes-Agent version.
 
 ### 📊 Status bar — TelemetryTape HUD
 
@@ -64,7 +64,6 @@ A compact heads-up display along the bottom edge. Left → right:
 - **live system resources** — GPU **VRAM** (`21.5/24G`) and system **RAM** (`42.5/63G`)
 
 This is an *advanced* piece (a source patch + rebuild — see [`advanced/`](advanced/README.md)).
-🔁 *Because it's built into the Hermes-Agent app, a **Hermes-Agent update removes it** — just re-run the install to bring it back.*
 
 ### 🌀 Background & loader — caduceus
 
@@ -73,8 +72,7 @@ This is an *advanced* piece (a source patch + rebuild — see [`advanced/`](adva
 The optional *caduceus extras*: a dotted-caduceus **backdrop** filling the empty
 state behind the gold "HERMES-AGENT" wordmark, plus a caduceus **loader** — two
 entwined sine-snakes that animate as a gold particle trail while Hermes-Agent is working
-(replacing the stock rose-curve spinner). Advanced piece — like the status bar it's
-built into the app, so 🔁 **a Hermes-Agent update removes it and you re-run the install.**
+(replacing the stock rose-curve spinner). Advanced piece.
 
 ### 🐾 Pets — Noir Neko
 
@@ -84,7 +82,22 @@ built into the app, so 🔁 **a Hermes-Agent update removes it and you re-run th
   <img src="docs/noir-neko-ascii-idle.gif" alt="Noir Neko ASCII idle animation" height="180">
 </p>
 
-<sub>Left: <b>Noir Neko</b>. Right: <b>Noir Neko ASCII Fine</b>. (Idle animations, shown on the theme's dark background.) Installed by <code>node install.mjs</code>, and saved in your Hermes-Agent folder — so they <b>survive Hermes-Agent updates</b>.</sub>
+<sub>Left: <b>Noir Neko</b>. Right: <b>Noir Neko ASCII Fine</b>. (Idle animations, shown on the theme's dark background.) Installed by <code>node install.mjs</code>.</sub>
+
+---
+
+## 🔁 What survives a Hermes-Agent update?
+
+When Hermes-Agent updates, it replaces the whole app with a fresh copy — so anything
+built *into the app* is wiped, while your own settings and data stay put. If an
+update removes the status bar or background, just re-run the install.
+
+| Piece | On a Hermes-Agent update |
+|---|---|
+| 🎨 **Theme** | ✅ stays put (saved in your settings) |
+| 🐾 **Pets** | ✅ survive (saved in your Hermes-Agent folder) |
+| 📊 **Status bar** | 🔁 removed — re-run the install |
+| 🌀 **Background & loader** | 🔁 removed — re-run the install |
 
 ---
 
@@ -169,18 +182,7 @@ The status bar and background edit Hermes-Agent's source code and rebuild the ap
 they're a separate tier. The AI installer handles them for you; to do it by hand,
 see [`advanced/README.md`](advanced/README.md).
 
-> ### 🔁 After you update Hermes-Agent, re-run the install for these two
->
-> **Why:** the status bar and background are **built into the Hermes-Agent app itself.**
-> When Hermes-Agent updates, it downloads a fresh copy of the whole app from its makers
-> and replaces yours — which erases anything that was built in, including these.
-> (Your **theme and pets live in your own settings/data, separate from the app, so
-> they stay put** — you don't need to redo those.)
->
-> **Fix:** it takes about a minute — run the install again, or paste the **Quick
-> start** prompt from the top of this README and tell the assistant you want the
-> status bar and background back. If the update changed Hermes-Agent a lot, the assistant
-> reconciles the difference for you automatically.
+> **Reminder:** a Hermes-Agent update reverts these two (they're built into the app) — re-run the install to restore them (about a minute; the AI reconciles any version difference). See the **update table** above.
 
 > **Heads-up (technical):** the advanced pieces need a Hermes-Agent desktop **dev
 > environment** (`apps/desktop` with dependencies installed), and Hermes-Agent must be

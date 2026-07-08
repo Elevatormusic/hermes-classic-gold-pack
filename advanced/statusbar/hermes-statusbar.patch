@@ -33,31 +33,6 @@ index dfe8b4e..034d5ad 100644
        }}
        tabIndex={visible ? 0 : -1}
        type="button"
-diff --git a/apps/desktop/src/app/shell/app-shell.tsx b/apps/desktop/src/app/shell/app-shell.tsx
-index efe9035..e0499a2 100644
---- a/apps/desktop/src/app/shell/app-shell.tsx
-+++ b/apps/desktop/src/app/shell/app-shell.tsx
-@@ -208,16 +208,16 @@ export function AppShell({
-           />
- 
-           {children}
-+
-+          {/* The compact pop-out drops the statusbar - it's a scratch window, not
-+              the full shell. */}
-+          {!isSecondaryWindow() && <StatusbarControls items={statusbarItems} leftItems={leftStatusbarItems} />}
-         </PaneShell>
- 
-         {/* Fixed overlays scoped to main's stacking context (terminal). Rendered
-             after PaneShell so it paints over pane content, but its z stays under
-             the panes' z-20 resize handles, keeping every pane resizable. */}
-         {mainOverlays}
--
--        {/* The compact pop-out drops the statusbar — it's a scratch window, not
--            the full shell. */}
--        {!isSecondaryWindow() && <StatusbarControls items={statusbarItems} leftItems={leftStatusbarItems} />}
-       </main>
- 
-       {overlays}
 diff --git a/apps/desktop/src/app/shell/context-usage-panel.tsx b/apps/desktop/src/app/shell/context-usage-panel.tsx
 index 5a243c0..fc0f47e 100644
 --- a/apps/desktop/src/app/shell/context-usage-panel.tsx

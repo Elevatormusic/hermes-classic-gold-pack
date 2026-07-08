@@ -14,6 +14,16 @@ test('prefers explicit --home when it has config.yaml', () => {
   assert.equal(got, '/explicit')
 })
 
+test('explicit --home is authoritative: returns null (no fallback) when it lacks config.yaml', () => {
+  // Even though the real LOCALAPPDATA/hermes has config.yaml, a bad --home must fail.
+  const laHome = join('C:\\la', 'hermes')
+  const got = resolveHermesHome({
+    explicit: '/typo', env: { LOCALAPPDATA: 'C:\\la' }, platform: 'win32',
+    exists: existsFor(join(laHome, 'config.yaml')),
+  })
+  assert.equal(got, null)
+})
+
 test('windows falls back to LOCALAPPDATA/hermes', () => {
   const env = { LOCALAPPDATA: 'C:\\Users\\x\\AppData\\Local', USERPROFILE: 'C:\\Users\\x' }
   const laHome = join('C:\\Users\\x\\AppData\\Local', 'hermes')

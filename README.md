@@ -1,15 +1,15 @@
-# 🪙 Hermes Classic Gold Pack
+# 🪙 Hermes-Agent Classic Gold Pack
 
-> A warm **gold makeover** for the [Hermes agent](https://github.com/NousResearch/hermes-agent) desktop app — theme, pets, status bar, and background.
+> A warm **gold makeover** for the [Hermes-Agent](https://github.com/NousResearch/hermes-agent) desktop app — theme, pets, status bar, and background.
 
 [![Release](https://img.shields.io/github/v/release/Elevatormusic/hermes-classic-gold-pack?color=CD7F32&label=release)](https://github.com/Elevatormusic/hermes-classic-gold-pack/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-B8860B.svg)](LICENSE)
-![Platform](https://img.shields.io/badge/Hermes-desktop-FFD700)
+![Platform](https://img.shields.io/badge/Hermes--Agent-desktop-FFD700)
 ![Install](https://img.shields.io/badge/install-AI--assisted-DAA520)
 
-![Hermes desktop running the Classic Gold theme — caduceus wordmark & backdrop, custom TelemetryTape status bar, and the Noir Neko ASCII pet](docs/hermes-classic-gold.png)
+![Hermes-Agent desktop running the Classic Gold theme — caduceus wordmark & backdrop, custom TelemetryTape status bar, and the Noir Neko ASCII pet](docs/hermes-classic-gold.png)
 
-**What is this?** A cosmetic pack for Hermes Desktop: a gold **theme**, two animated
+**What is this?** A cosmetic pack for Hermes-Agent Desktop: a gold **theme**, two animated
 **pets**, an optional **status bar**, and an optional **caduceus background**. The
 theme and pets take about 30 seconds; the status bar and background are optional extras.
 
@@ -22,7 +22,7 @@ theme and pets take about 30 seconds; the status bar and background are optional
 > everything and installs it for you. Nothing else to download.
 
 ```text
-You have shell + file access. Install the Hermes "Classic Gold" pack: clone
+You have shell + file access. Install the Hermes-Agent "Classic Gold" pack: clone
 https://github.com/Elevatormusic/hermes-classic-gold-pack, then open ai/install.md
 inside it and follow those steps exactly.
 ```
@@ -48,8 +48,8 @@ piece on its own.
 
 The `hermes-classic-gold` desktop theme — warm gold borders, cornsilk text, in
 both **light and dark**. The AI installer sets it for you (`node theme/apply-theme.mjs`);
-it lives in the app's localStorage, so it needs no rebuild, works on any Hermes
-version, and **stays put when Hermes updates**.
+it lives in the app's localStorage, so it needs no rebuild, works on any Hermes-Agent
+version, and **stays put when Hermes-Agent updates**.
 
 ### 📊 Status bar — TelemetryTape HUD
 
@@ -64,7 +64,7 @@ A compact heads-up display along the bottom edge. Left → right:
 - **live system resources** — GPU **VRAM** (`21.5/24G`) and system **RAM** (`42.5/63G`)
 
 This is an *advanced* piece (a source patch + rebuild — see [`advanced/`](advanced/README.md)).
-🔁 *Because it's built into the Hermes app, a **Hermes update removes it** — just re-run the install to bring it back.*
+🔁 *Because it's built into the Hermes-Agent app, a **Hermes-Agent update removes it** — just re-run the install to bring it back.*
 
 ### 🌀 Background & loader — caduceus
 
@@ -72,9 +72,9 @@ This is an *advanced* piece (a source patch + rebuild — see [`advanced/`](adva
 
 The optional *caduceus extras*: a dotted-caduceus **backdrop** filling the empty
 state behind the gold "HERMES-AGENT" wordmark, plus a caduceus **loader** — two
-entwined sine-snakes that animate as a gold particle trail while Hermes is working
+entwined sine-snakes that animate as a gold particle trail while Hermes-Agent is working
 (replacing the stock rose-curve spinner). Advanced piece — like the status bar it's
-built into the app, so 🔁 **a Hermes update removes it and you re-run the install.**
+built into the app, so 🔁 **a Hermes-Agent update removes it and you re-run the install.**
 
 ### 🐾 Pets — Noir Neko
 
@@ -84,7 +84,7 @@ built into the app, so 🔁 **a Hermes update removes it and you re-run the inst
   <img src="docs/noir-neko-ascii-idle.gif" alt="Noir Neko ASCII idle animation" height="180">
 </p>
 
-<sub>Left: <b>Noir Neko</b>. Right: <b>Noir Neko ASCII Fine</b>. (Idle animations, shown on the theme's dark background.) Installed by <code>node install.mjs</code>, and saved in your Hermes folder — so they <b>survive Hermes updates</b>.</sub>
+<sub>Left: <b>Noir Neko</b>. Right: <b>Noir Neko ASCII Fine</b>. (Idle animations, shown on the theme's dark background.) Installed by <code>node install.mjs</code>, and saved in your Hermes-Agent folder — so they <b>survive Hermes-Agent updates</b>.</sub>
 
 ---
 
@@ -107,14 +107,14 @@ node install.mjs --activate noir-neko-ascii-fine
 - `--home <path>` points at a specific `HERMES_HOME` (the folder with `config.yaml`);
   otherwise it's detected automatically.
 
-Then the **theme**. Automatic (restarts Hermes once — run it last):
+Then the **theme**. Automatic (restarts Hermes-Agent once — run it last):
 
 ```bash
 node theme/apply-theme.mjs
 ```
 
-Or by hand: open Hermes Desktop → `Ctrl/Cmd+Shift+I` → **Console** tab → paste the
-contents of [`theme/install-theme.js`](theme/install-theme.js) → Enter. Restart Hermes.
+Or by hand: open Hermes-Agent Desktop → `Ctrl/Cmd+Shift+I` → **Console** tab → paste the
+contents of [`theme/install-theme.js`](theme/install-theme.js) → Enter. Restart Hermes-Agent.
 </details>
 
 ---
@@ -124,7 +124,7 @@ contents of [`theme/install-theme.js`](theme/install-theme.js) → Enter. Restar
 Paste this into your AI assistant — it asks which parts to remove, then removes them:
 
 ```text
-You have shell + file access. Uninstall the Hermes "Classic Gold" pack: open
+You have shell + file access. Uninstall the Hermes-Agent "Classic Gold" pack: open
 https://github.com/Elevatormusic/hermes-classic-gold-pack (clone it if needed),
 read ai/uninstall.md, ask me which parts to remove, then follow it.
 ```
@@ -132,13 +132,13 @@ read ai/uninstall.md, ask me which parts to remove, then follow it.
 <details>
 <summary><b>Uninstall by hand</b></summary>
 
-- **Theme** — open Hermes → Appearance → pick another theme, or in the DevTools
+- **Theme** — open Hermes-Agent → Appearance → pick another theme, or in the DevTools
   console: `localStorage.setItem('hermes-desktop-theme-v2','nous');location.reload()`.
 - **Pets** — delete `HERMES_HOME/pets/noir-neko` and `.../noir-neko-ascii-fine`.
   Don't use the in-app "remove" on an adopted pet — just delete the folder. Restore
   your previous pet from `config.yaml.bak` if needed.
 - **Status bar / background** — restore the `*.orig` backups the apply scripts made,
-  then `cd apps/desktop && npm run pack` (Hermes quit).
+  then `cd apps/desktop && npm run pack` (Hermes-Agent quit).
 
 Full details: [`ai/uninstall.md`](ai/uninstall.md).
 </details>
@@ -151,7 +151,7 @@ Paste this into your AI assistant — it collects diagnostics and hands you a
 ready-to-submit GitHub issue link (you review before sending):
 
 ```text
-You have shell + file access. Something in the Hermes "Classic Gold" pack isn't
+You have shell + file access. Something in the Hermes-Agent "Classic Gold" pack isn't
 working. In https://github.com/Elevatormusic/hermes-classic-gold-pack, read
 ai/issuereport.md and follow it: gather diagnostics and give me a pre-filled
 GitHub issue link to review before I submit.
@@ -159,32 +159,32 @@ GitHub issue link to review before I submit.
 
 Doing it yourself? Run `node scripts/diagnostics.mjs --logs` and open the link it
 prints, or use **Issues → New → "Install failure"**. The issue only includes your
-OS, Node version, and Hermes commit.
+OS, Node version, and Hermes-Agent commit.
 
 ---
 
 ## 🔧 Advanced — status bar & caduceus background
 
-The status bar and background edit Hermes' source code and rebuild the app, so
+The status bar and background edit Hermes-Agent's source code and rebuild the app, so
 they're a separate tier. The AI installer handles them for you; to do it by hand,
 see [`advanced/README.md`](advanced/README.md).
 
-> ### 🔁 After you update Hermes, re-run the install for these two
+> ### 🔁 After you update Hermes-Agent, re-run the install for these two
 >
-> **Why:** the status bar and background are **built into the Hermes app itself.**
-> When Hermes updates, it downloads a fresh copy of the whole app from its makers
+> **Why:** the status bar and background are **built into the Hermes-Agent app itself.**
+> When Hermes-Agent updates, it downloads a fresh copy of the whole app from its makers
 > and replaces yours — which erases anything that was built in, including these.
 > (Your **theme and pets live in your own settings/data, separate from the app, so
 > they stay put** — you don't need to redo those.)
 >
 > **Fix:** it takes about a minute — run the install again, or paste the **Quick
 > start** prompt from the top of this README and tell the assistant you want the
-> status bar and background back. If the update changed Hermes a lot, the assistant
+> status bar and background back. If the update changed Hermes-Agent a lot, the assistant
 > reconciles the difference for you automatically.
 
-> **Heads-up (technical):** the advanced pieces need a Hermes desktop **dev
-> environment** (`apps/desktop` with dependencies installed), and Hermes must be
-> **fully quit** for the rebuild (on Windows the scripts detect a running Hermes and
+> **Heads-up (technical):** the advanced pieces need a Hermes-Agent desktop **dev
+> environment** (`apps/desktop` with dependencies installed), and Hermes-Agent must be
+> **fully quit** for the rebuild (on Windows the scripts detect a running Hermes-Agent and
 > refuse to build). Patches target `NousResearch/hermes-agent@8301654`; on a
 > different version the AI reconciles them via [`ai/repair.md`](ai/repair.md).
 
@@ -192,16 +192,16 @@ see [`advanced/README.md`](advanced/README.md).
 
 ## ❓ Requirements & jargon
 
-- **Hermes** installed. The pack finds your **HERMES_HOME** (the folder holding
+- **Hermes-Agent** installed. The pack finds your **HERMES_HOME** (the folder holding
   `config.yaml`) automatically.
-- **Node.js** to run the installer — it ships with Hermes, so you already have it.
+- **Node.js** to run the installer — it ships with Hermes-Agent, so you already have it.
 - **"Agentic assistant"** = an AI that can run commands and edit files on your
   machine (Claude Code, Cursor, Codex CLI). A plain chatbot can't do the install.
-- **"DevTools console"** = the developer panel inside Hermes, opened with
+- **"DevTools console"** = the developer panel inside Hermes-Agent, opened with
   `Ctrl/Cmd+Shift+I` → **Console** tab.
-- Advanced tier only: a Hermes desktop **dev environment** + Git.
+- Advanced tier only: a Hermes-Agent desktop **dev environment** + Git.
 
-> **Scope:** targets the Hermes *desktop* app. The installer is cross-platform
+> **Scope:** targets the Hermes-Agent *desktop* app. The installer is cross-platform
 > (Windows/macOS/Linux) but verified on Windows; other OSes are best-effort —
 > issues and PRs welcome.
 
@@ -209,5 +209,5 @@ see [`advanced/README.md`](advanced/README.md).
 
 ## 📜 Credits & license
 
-Theme, pets, and status bar by **Shaya (Elevatormusic)**. Built for the Hermes
-agent by Nous Research. Released under the [MIT License](LICENSE).
+Theme, pets, and status bar by **Shaya (Elevatormusic)**. Built for **Hermes-Agent**
+by [Nous Research](https://github.com/NousResearch/hermes-agent). Released under the [MIT License](LICENSE).

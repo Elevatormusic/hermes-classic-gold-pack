@@ -11,13 +11,43 @@ The theme and pets install in ~30 seconds and work on any machine. The status
 bar and extras edit the desktop app's source, so they're a separate, honest
 "advanced" tier (see the caveats below).
 
-## Preview
+## What's inside
 
-The screenshot above is the real desktop with **everything applied** — theme,
-caduceus extras, status bar, and a pet. The exact palette and the pet idle
-animations:
+The screenshot above is the real desktop with **everything applied**. Here's each
+piece on its own.
+
+### 🎨 Theme — gold & kawaii
 
 ![Classic Hermes gold theme — dark & light palette](docs/theme-palette.png)
+
+The `hermes-classic-gold` desktop theme — warm gold borders, cornsilk text, in
+both **light and dark**. Installs via a one-time DevTools console paste
+(localStorage), so it needs no rebuild and works on any Hermes version.
+
+### 📊 Status bar — TelemetryTape HUD
+
+![Custom TelemetryTape status bar](docs/status-bar.png)
+
+A compact heads-up display along the bottom edge. Left → right:
+
+- **workspace** (`HERMES-AGENT`) · **agent state** (`[IDLE]`)
+- **active model** (`qwen3.6-35b-a3b-mtp ⌄`) · **reasoning effort** (`◆`) · **provider** (`⌂ LM Studio`)
+- **tokens + context-usage bar** (`0tok [▨▨] 00%`)
+- **throughput** (`⚡ --/s`) · **cost** (`$ --`) · **turn timer** (`⊙ --`)
+- **live system resources** — GPU **VRAM** (`21.5/24G`) and system **RAM** (`42.5/63G`)
+
+This is an *advanced* piece (a source patch + rebuild — see [`advanced/`](advanced/README.md)).
+
+### 🌀 Background & loader — caduceus
+
+![Caduceus dotted backdrop behind the HERMES-AGENT wordmark](docs/caduceus-backdrop.png)
+
+The optional *caduceus extras*: a dotted-caduceus **backdrop** filling the empty
+state behind the gold "HERMES-AGENT" wordmark, plus a caduceus **loader** — two
+entwined sine-snakes that animate as a gold particle trail while Hermes is working
+(replacing the stock rose-curve spinner). Advanced piece.
+
+### 🐾 Pets — Noir Neko
 
 <p>
   <img src="docs/noir-neko-idle.gif" alt="Noir Neko idle animation" height="180">
@@ -25,7 +55,7 @@ animations:
   <img src="docs/noir-neko-ascii-idle.gif" alt="Noir Neko ASCII idle animation" height="180">
 </p>
 
-<sub>Left: <b>Noir Neko</b>. Right: <b>Noir Neko ASCII Fine</b>. (Idle animations, shown on the theme's dark background.)</sub>
+<sub>Left: <b>Noir Neko</b>. Right: <b>Noir Neko ASCII Fine</b>. (Idle animations, shown on the theme's dark background.) Installed by <code>node install.mjs</code>.</sub>
 
 > **Note on scope:** this pack targets the Hermes *desktop* app. The core
 > installer is cross-platform (Windows/macOS/Linux); it has been verified on
@@ -93,15 +123,6 @@ of [`theme/install-theme.js`](theme/install-theme.js) → Enter. It registers an
 activates the gold theme (dark mode) and reloads.
 
 Restart Hermes to see the pets and theme.
-
-## What each piece does
-
-| Piece | What it is | How it installs |
-|---|---|---|
-| **Gold theme** | `hermes-classic-gold` desktop theme (light + dark) | DevTools console paste (localStorage) |
-| **Two pets** | `noir-neko`, `noir-neko-ascii-fine` sprite mascots | `node install.mjs` → `HERMES_HOME/pets/` |
-| **Status bar** | Custom TelemetryTape HUD (CPU/mem, context, timers) | Source patch + rebuild (advanced) |
-| **Caduceus extras** | Caduceus loader, backdrop, hero wordmark | Optional source patch + rebuild (advanced) |
 
 ## Advanced: status bar + caduceus extras
 

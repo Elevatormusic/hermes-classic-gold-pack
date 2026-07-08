@@ -4,8 +4,9 @@ name: Moderate comments
 # "here's a fix, just run this attachment" malware pattern — but only from
 # untrusted / brand-new accounts, so real bug reports are untouched.
 #
-# Owner/member/collaborator content is never moderated. Everything it does is
-# reversible: un-hide the comment and remove the `possible-malware` label.
+# Owner/member/collaborator content is never moderated, and it never labels the
+# issue (a public label scares visitors). Everything it does is reversible: just
+# un-hide the comment.
 
 on:
   issue_comment:

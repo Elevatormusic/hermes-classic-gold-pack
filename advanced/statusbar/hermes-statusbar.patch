@@ -1,3 +1,38 @@
+diff --git a/apps/desktop/src/app/chat/composer/index.tsx b/apps/desktop/src/app/chat/composer/index.tsx
+index 1f5df46..c335101 100644
+--- a/apps/desktop/src/app/chat/composer/index.tsx
++++ b/apps/desktop/src/app/chat/composer/index.tsx
+@@ -811,7 +811,7 @@ export function ChatBar({
+               ? // Floating: the composer (with its own border) floats with an even
+                 // 5px transparent grab margin around it — drag that to move it.
+                 'fixed w-[var(--composer-popout-width)] max-w-[calc(100vw-1.5rem)] bg-transparent p-[5px]'
+-              : 'absolute bottom-0 left-1/2 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 pt-2 pb-[var(--composer-shell-pad-block-end)]',
++              : 'absolute bottom-[var(--composer-dock-offset)] left-1/2 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 pt-2 pb-1',
+             dragging && 'cursor-grabbing select-none touch-none'
+           )}
+           data-drag-active={dragActive ? '' : undefined}
+@@ -996,7 +996,7 @@ export function ChatBarFallback() {
+   return (
+     <div
+       className={cn(
+-        'group/composer absolute bottom-0 left-1/2 z-30 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 rounded-2xl pt-2 pb-[var(--composer-shell-pad-block-end)]',
++        'group/composer absolute bottom-[var(--composer-dock-offset)] left-1/2 z-30 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 rounded-2xl pt-2 pb-1',
+         'bg-linear-to-b from-transparent to-background/55'
+       )}
+       data-slot="composer-root"
+diff --git a/apps/desktop/src/app/chat/scroll-to-bottom-button.tsx b/apps/desktop/src/app/chat/scroll-to-bottom-button.tsx
+index dfe8b4e..034d5ad 100644
+--- a/apps/desktop/src/app/chat/scroll-to-bottom-button.tsx
++++ b/apps/desktop/src/app/chat/scroll-to-bottom-button.tsx
+@@ -62,7 +62,7 @@ export function ScrollToBottomButton() {
+         requestScrollToBottom()
+       }}
+       style={{
+-        bottom: 'calc(var(--composer-measured-height) + var(--status-stack-measured-height) + 0.625rem)'
++        bottom: 'calc(var(--composer-measured-height) + var(--composer-dock-offset) + var(--status-stack-measured-height) + 0.625rem)'
+       }}
+       tabIndex={visible ? 0 : -1}
+       type="button"
 diff --git a/apps/desktop/src/app/shell/app-shell.tsx b/apps/desktop/src/app/shell/app-shell.tsx
 index efe9035..e0499a2 100644
 --- a/apps/desktop/src/app/shell/app-shell.tsx
@@ -918,6 +953,32 @@ index 9a9f098..39bd0a7 100644
 +
 +
 +
+diff --git a/apps/desktop/src/components/assistant-ui/thread/index.tsx b/apps/desktop/src/components/assistant-ui/thread/index.tsx
+index ff30931..00fa0a9 100644
+--- a/apps/desktop/src/components/assistant-ui/thread/index.tsx
++++ b/apps/desktop/src/components/assistant-ui/thread/index.tsx
+@@ -89,7 +89,7 @@ export const Thread: FC<{
+   )
+ 
+   const emptyPlaceholder = intro ? (
+-    <div className="flex min-h-0 w-full flex-col items-center justify-center pt-[var(--composer-measured-height)]">
++    <div className="flex min-h-0 w-full flex-col items-center justify-center pt-[calc(var(--composer-measured-height)_+_var(--composer-dock-offset))]">
+       <Intro {...intro} />
+     </div>
+   ) : undefined
+diff --git a/apps/desktop/src/components/assistant-ui/tool/approval.tsx b/apps/desktop/src/components/assistant-ui/tool/approval.tsx
+index 3416c22..fb03829 100644
+--- a/apps/desktop/src/components/assistant-ui/tool/approval.tsx
++++ b/apps/desktop/src/components/assistant-ui/tool/approval.tsx
+@@ -76,7 +76,7 @@ export const PendingApprovalFallback: FC = () => {
+     <div
+       className="pointer-events-none absolute left-1/2 z-30 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2"
+       data-slot="tool-approval-fallback"
+-      style={{ bottom: 'calc(var(--composer-measured-height) + var(--status-stack-measured-height) + 0.875rem)' }}
++      style={{ bottom: 'calc(var(--composer-measured-height) + var(--composer-dock-offset) + var(--status-stack-measured-height) + 0.875rem)' }}
+     >
+       <div className="pointer-events-auto rounded-xl border border-primary/30 bg-(--ui-chat-surface-background) px-3 py-2 shadow-lg backdrop-blur-xl [-webkit-backdrop-filter:blur(1rem)]">
+         <div className="flex min-w-0 items-center gap-2 text-sm text-primary">
 diff --git a/apps/desktop/src/global.d.ts b/apps/desktop/src/global.d.ts
 index 870d331..46856db 100644
 --- a/apps/desktop/src/global.d.ts
@@ -933,6 +994,45 @@ index 870d331..46856db 100644
        saveImageFromUrl: (url: string) => Promise<boolean>
        saveImageBuffer: (data: ArrayBuffer | Uint8Array, ext: string) => Promise<string>
        saveClipboardImage: () => Promise<string>
+diff --git a/apps/desktop/src/styles.css b/apps/desktop/src/styles.css
+index e5477bb..e72aa47 100644
+--- a/apps/desktop/src/styles.css
++++ b/apps/desktop/src/styles.css
+@@ -333,7 +333,7 @@
+     /* Space under last message vs overlay composer — driven by the measured composer height (see composer/index.tsx)
+        plus the out-of-flow status stack's measured height (see status-stack/index.tsx) when one is showing. */
+     --status-stack-measured-height: 0px;
+-    --thread-last-message-clearance: calc(var(--composer-measured-height) + var(--status-stack-measured-height) + 2rem);
++    --thread-last-message-clearance: calc(var(--composer-measured-height) + var(--composer-dock-offset) + var(--status-stack-measured-height) + 2rem);
+ 
+     --composer-shell-pad-block-end: 0.625rem;
+     --message-text-indent: 0.75rem;
+@@ -372,11 +372,15 @@
+     --composer-input-max-height: 9.375rem;
+     --composer-input-inline-min-width: 8rem;
+     --composer-fallback-height: 2.75rem;
++    /* Bottom-docked composer floats this far up to clear the Classic Gold status
++       bar; the thread clamp below reserves the same amount so the last message
++       never slides under it. Stock Hermes-Agent (no status bar) = 0px. */
++    --composer-dock-offset: 4.75rem;
+     --composer-measured-height: calc(0.5rem + var(--composer-shell-pad-block-end) + var(--composer-fallback-height));
+     --composer-surface-measured-height: var(--composer-fallback-height);
+     --thread-viewport-height: max(
+       0rem,
+-      calc(100% - var(--composer-measured-height) + var(--composer-surface-measured-height))
++      calc(100% - var(--composer-measured-height) - var(--composer-dock-offset) + var(--composer-surface-measured-height))
+     );
+     --vsq: min(0.5vh, 0.5vw);
+     --image-preview-max-width: 34rem;
+@@ -1033,7 +1037,7 @@ text-* variant utilities. */ .btn-arc {
+ [data-slot='aui_intro'] {
+   align-items: center;
+   justify-content: center;
+-  padding-bottom: var(--composer-measured-height);
++  padding-bottom: calc(var(--composer-measured-height) + var(--composer-dock-offset));
+   text-align: center;
+ }
+ 
 diff --git a/apps/desktop/src/types/hermes.ts b/apps/desktop/src/types/hermes.ts
 index 63ac7f9..ba7001a 100644
 --- a/apps/desktop/src/types/hermes.ts

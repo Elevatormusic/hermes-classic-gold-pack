@@ -15,8 +15,11 @@
 ## Status bar (TelemetryTape HUD)
 
 Adds the custom status bar (system CPU/mem, context usage, session/turn timers,
-caduceus rail glyphs). Touches 8 files under `apps/desktop/src/` including a new
-`app/shell/hooks/use-system-resources.ts`.
+caduceus rail glyphs). Touches 13 files under `apps/desktop/src/` including a new
+`app/shell/hooks/use-system-resources.ts`. This also lifts the chat composer to
+sit above the status bar and reserves that space in the thread's scroll clamp (via
+a single `--composer-dock-offset` variable) so the last message never slides under
+the prompt box.
 
 ```bash
 node advanced/statusbar/apply-statusbar.mjs --repo "<path-to>/hermes-agent"

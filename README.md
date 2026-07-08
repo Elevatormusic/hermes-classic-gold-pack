@@ -1,5 +1,7 @@
 # Hermes Classic Gold Pack
 
+![Hermes desktop running the Classic Gold theme — caduceus wordmark & backdrop, custom TelemetryTape status bar, and the Noir Neko ASCII pet](docs/hermes-classic-gold.png)
+
 A drop-in look for the [Hermes agent](https://github.com/NousResearch/hermes-agent):
 the **Classic Hermes gold theme** (warm gold borders, cornsilk text, light + dark),
 **two Noir Neko pets**, and — for the adventurous — a custom **TelemetryTape
@@ -10,6 +12,10 @@ bar and extras edit the desktop app's source, so they're a separate, honest
 "advanced" tier (see the caveats below).
 
 ## Preview
+
+The screenshot above is the real desktop with **everything applied** — theme,
+caduceus extras, status bar, and a pet. The exact palette and the pet idle
+animations:
 
 ![Classic Hermes gold theme — dark & light palette](docs/theme-palette.png)
 

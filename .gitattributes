@@ -1,0 +1,10 @@
+# Normalize all text to LF in the repo and on checkout, so the installer,
+# scripts, and patches behave identically on Windows/macOS/Linux.
+* text=auto eol=lf
+
+# Patches must be preserved byte-for-byte (never EOL-converted) or `git apply`
+# can fail / inject CRLF into source files.
+*.patch -text
+
+# Binary assets: never touch.
+*.webp binary

@@ -1,0 +1,107 @@
+name: Moderate comments
+
+# Auto-hide + flag suspicious issue/PR comments (and new issues) that look like the
+# "here's a fix, just run this attachment" malware pattern — but only from
+# untrusted / brand-new accounts, so real bug reports are untouched.
+#
+# Owner/member/collaborator content is never moderated. Everything it does is
+# reversible: un-hide the comment and remove the `possible-malware` label.
+
+on:
+  issue_comment:
+    types: [created, edited]
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  moderate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const isComment = context.eventName === 'issue_comment';
+            const p = context.payload;
+            const obj = isComment ? p.comment : p.issue;
+            const author = obj.user.login;
+            const assoc = obj.author_association;
+            const body = obj.body || '';
+            const lower = body.toLowerCase();
+
+            // Never moderate trusted people or the bot itself.
+            if (['OWNER', 'MEMBER', 'COLLABORATOR'].includes(assoc)) return;
+            if (author.endsWith('[bot]')) return;
+
+            // --- signals ---
+            // Non-image file attachment (zip/exe/etc go to /files/, images to /assets/).
+            const hasFileAttachment = /user-attachments\/files\//i.test(body);
+            const hasArchiveOrExe = /\.(zip|exe|msi|scr|bat|cmd|ps1|vbs|7z|rar|dmg|pkg|apk|jar)\b/i.test(body);
+            const dropperCmd = /\b(curl|wget|iwr|invoke-webrequest|certutil|bitsadmin)\b|base64\s+-d|powershell\s+-e|-enc\s|frombase64string/i.test(body);
+            const phrases = [
+              'remote debugging port', 'debugging port', 'bypass', 'approval gate',
+              'approval prompt', 'disable the', 'turn off the', 'hidden fix', 'just run',
+              'run this', 'trust me', 'works for me', 'hermes_fix', 'one-click', 'no questions',
+            ];
+            const phraseHits = phrases.filter((s) => lower.includes(s));
+
+            // Brand-new account?
+            let ageDays = 999;
+            try {
+              const u = await github.rest.users.getByUsername({ username: author });
+              ageDays = (Date.now() - new Date(u.data.created_at).getTime()) / 86400000;
+            } catch {}
+
+            let score = 0;
+            if (hasFileAttachment) score += 3;
+            if (hasArchiveOrExe) score += 3;
+            if (dropperCmd) score += 3;
+            score += phraseHits.length;
+            if (ageDays < 7) score += 2;
+            if (['NONE', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR'].includes(assoc)) score += 1;
+
+            if (score < 3) return; // not suspicious enough — leave it alone
+
+            const issue_number = p.issue.number;
+            const { owner, repo } = context.repo;
+            const secUrl = `https://github.com/${owner}/${repo}/blob/main/SECURITY.md`;
+
+            // 1) ensure the label exists, then apply it
+            try {
+              await github.rest.issues.createLabel({ owner, repo, name: 'possible-malware', color: 'd73a4a', description: 'Auto-flagged: possible malware / social-engineering' });
+            } catch {} // already exists
+            try {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['possible-malware'] });
+            } catch (e) { core.warning('addLabels: ' + e.message); }
+
+            // 2) hide the comment (reversible) — issue bodies can't be minimized
+            if (isComment) {
+              try {
+                await github.graphql(
+                  'mutation($id:ID!){ minimizeComment(input:{subjectId:$id, classifier:SPAM}){ minimizedComment{ isMinimized } } }',
+                  { id: obj.node_id }
+                );
+              } catch (e) { core.warning('minimize: ' + e.message); }
+            }
+
+            // 3) leave a visible warning
+            const reasons = [
+              hasFileAttachment ? 'a file attachment' : null,
+              hasArchiveOrExe ? 'an archive/executable link' : null,
+              dropperCmd ? 'a download-and-run command' : null,
+              phraseHits.length ? `phrase(s): ${phraseHits.join(', ')}` : null,
+              ageDays < 7 ? `a ${Math.round(ageDays)}-day-old account` : null,
+            ].filter(Boolean).join('; ');
+            const warn = [
+              `⚠️ **Auto-moderated.** This ${isComment ? 'comment' : 'issue'} from @${author} was flagged (${reasons})` + (isComment ? ' and hidden pending review.' : '.'),
+              '',
+              `**Do not download or run anything it links or attaches.** This project's fixes ship as commits in this repo — never as an attachment or a "run this" script. See [SECURITY.md](${secUrl}).`,
+              '',
+              '_Maintainer: false positive? Un-hide the comment and remove the `possible-malware` label._',
+            ].join('\n');
+            try {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: warn });
+            } catch (e) { core.warning('createComment: ' + e.message); }

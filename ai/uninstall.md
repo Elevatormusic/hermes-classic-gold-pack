@@ -11,6 +11,26 @@ assistant here ("read `ai/uninstall.md`, ask what to remove, follow it").
 > your previous pet from the backup") — then do it and report what changed. Don't
 > make them guess.
 
+## Fastest path — the automated uninstaller
+
+For any normal pack install there's a change manifest, so prefer:
+
+```bash
+node scripts/uninstall.mjs --dry-run    # preview the plan, change nothing
+node scripts/uninstall.mjs              # do it (asks to confirm; --yes to skip)
+```
+
+It reverses the install from the recorded manifest — restoring **your real prior
+theme + mode, pet, and config.yaml** (not a hardcoded default), deleting only pets
+the pack added (keeping any you already had), and rebuilding after restoring source
+files. For safety it auto-restores a source file **only** from a same-version
+`.orig` backup; anything applied by full-copy/reconcile or against a different
+Hermes version is left alone and flagged for `ai/repair.md`. Theme is localStorage,
+so it prints the exact one-line revert snippet to paste. Run
+`node scripts/diagnostics.mjs status` first to see what's currently installed.
+
+The manual steps below are the fallback for older installs that predate the manifest.
+
 ## Step 1 — Ask what to remove
 
 Ask the user which parts to uninstall (they may pick more than one):

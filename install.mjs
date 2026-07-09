@@ -11,6 +11,7 @@ import { createInterface } from 'node:readline'
 import { resolveHermesHome, findHermesHomes } from './lib/hermes-home.mjs'
 import { preflight, reportPreflight } from './lib/preflight.mjs'
 import { recordApplied, appendManifest, classifyState } from './lib/pack-stamp.mjs'
+import { resolveAgentRepo } from './lib/agent-repo.mjs'
 import { installPets } from './lib/pets.mjs'
 import { activatePetInConfig } from './lib/config-edit.mjs'
 
@@ -155,7 +156,7 @@ async function main(argv) {
     console.error('  Pass --home <path-to-your-hermes-dir> (the folder that contains config.yaml).')
     return 1
   }
-  const repo = args.repo || join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent')
+  const repo = resolveAgentRepo({ explicit: args.repo, home })
   for (const t of args.advanced) {
     if (!TIER_SCRIPTS[t]) {
       console.error(`✗ --advanced: unknown tier "${t}" (use: statusbar, caduceus).`)

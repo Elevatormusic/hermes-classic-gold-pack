@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
 import { preflight, reportPreflight } from '../lib/preflight.mjs'
 import { recordApplied, appendManifest } from '../lib/pack-stamp.mjs'
+import { resolveAgentRepo } from '../lib/agent-repo.mjs'
 
 const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
 const COMMON_DIR = dirname(fileURLToPath(import.meta.url)) // repo/advanced
@@ -98,7 +99,7 @@ function recordInstall(tier, head, via, rels, additiveOnly) {
  */
 export function applyTier({ scriptDir, patchName, tier, label }) {
   const args = parse(process.argv.slice(2))
-  const repo = args.repo || join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent')
+  const repo = resolveAgentRepo({ explicit: args.repo })
   if (!existsSync(join(repo, 'apps', 'desktop'))) {
     console.error(`✗ Not a hermes-agent checkout: ${repo}\n  Pass --repo <path>.`)
     return 1

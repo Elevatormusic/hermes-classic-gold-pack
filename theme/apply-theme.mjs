@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
 import { preflight } from '../lib/preflight.mjs'
 import { recordApplied, appendManifest } from '../lib/pack-stamp.mjs'
+import { resolveAgentRepo, hermesExePath } from '../lib/agent-repo.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SNIPPET = readFileSync(join(HERE, 'install-theme.js'), 'utf8')
@@ -59,7 +60,7 @@ function hermesExe(args) {
   if (args.exe) return existsSync(args.exe) ? args.exe : null
   const home = resolveHermesHome({})
   if (!home) return null
-  const exe = join(home, 'hermes-agent', 'apps', 'desktop', 'release', 'win-unpacked', 'Hermes.exe')
+  const exe = hermesExePath(resolveAgentRepo({ home }))
   return existsSync(exe) ? exe : null
 }
 

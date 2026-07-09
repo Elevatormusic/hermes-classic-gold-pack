@@ -20,6 +20,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from './lib/hermes-home.mjs'
+import { resolveAgentRepo } from './lib/agent-repo.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const isWin = process.platform === 'win32'
@@ -73,7 +74,7 @@ const TIER_SCRIPT = {
 
 function main() {
   const args = parseArgs(process.argv.slice(2))
-  const repo = args.repo || join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent')
+  const repo = resolveAgentRepo({ explicit: args.repo })
   const desktop = join(repo, 'apps', 'desktop')
   if (!existsSync(desktop)) {
     console.error(`✗ Not a hermes-agent checkout: ${repo}\n  Pass --repo <path>.`)

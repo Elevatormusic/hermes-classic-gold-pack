@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from '../../lib/hermes-home.mjs'
+import { resolveAgentRepo } from '../../lib/agent-repo.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PACK_ROOT = join(HERE, '..', '..')
@@ -55,7 +56,7 @@ function notify(text) {
 }
 
 function main() {
-  const repo = process.env.HERMES_AGENT_REPO || join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent')
+  const repo = resolveAgentRepo({})
   if (!existsSync(join(repo, 'apps', 'desktop'))) return 0
   if (!packWasApplied()) return 0 // never installed → nothing to nag about
   if (!tierIsStock(repo)) return 0 // still themed → all good

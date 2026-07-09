@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
 import { classifyState } from '../lib/pack-stamp.mjs'
+import { resolveAgentRepo } from '../lib/agent-repo.mjs'
 
 const REPO = 'Elevatormusic/hermes-classic-gold-pack'
 const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
@@ -17,7 +18,7 @@ export function collect({ env = process.env, platform = process.platform } = {})
   let packStamp = null
   let packApplied = null
   if (hermesHome) {
-    const repo = join(hermesHome, 'hermes-agent')
+    const repo = resolveAgentRepo({ home: hermesHome })
     try {
       agentHead = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD'], {
         encoding: 'utf8',
@@ -122,7 +123,7 @@ const STATE_ACTION = {
 export function formatStatus(info, { base = BASE } = {}) {
   const home = info.hermesHome
   if (!home) return '### Classic Gold status\n- HERMES_HOME: (not found — pass --home or install Hermes)'
-  const repo = join(home, 'hermes-agent')
+  const repo = resolveAgentRepo({ home })
   const state = classifyState({ repo, home, base, agentHead: info.agentHead })
   const stamp = state.stamp
   const lines = [

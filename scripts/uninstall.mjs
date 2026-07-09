@@ -15,6 +15,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
 import { readStamp, readManifest, clearApplied, manifestPath } from '../lib/pack-stamp.mjs'
+import { resolveAgentRepo } from '../lib/agent-repo.mjs'
 
 function parseArgs(argv) {
   const a = { home: undefined, repo: undefined, dryRun: false, build: true, yes: false }
@@ -80,7 +81,7 @@ async function main() {
     return 0
   }
 
-  const repo = args.repo || join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent')
+  const repo = resolveAgentRepo({ explicit: args.repo, home })
   const head = currentHead(repo)
 
   const files = latestByKey(manifest.entries, 'file', (e) => e.rel)

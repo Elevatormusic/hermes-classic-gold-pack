@@ -60,6 +60,11 @@ Omit `--activate` to install both pets without changing the user's current pet.
 `install.mjs` creates the `display.pet` block if the config doesn't have one yet,
 so `--activate` works on a brand-new Hermes. This step is safe while Hermes runs.
 
+> `install.mjs` confirms the target `HERMES_HOME` before its first write. If it
+> reports **more than one** Hermes install it will refuse to guess — re-run with
+> `--home "<path>"` to pick the right one (or `--yes` to accept the first). Since
+> you run non-interactively, prefer passing `--home` explicitly when you know it.
+
 **3. Offer the advanced pieces.** Ask the user whether they also want the custom
 **status bar** and/or the **caduceus extras** (loader + backdrop + wordmark). If
 yes, run the matching script:

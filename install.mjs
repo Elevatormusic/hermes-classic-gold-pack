@@ -5,7 +5,9 @@
 import { readFileSync, writeFileSync, copyFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveHermesHome } from './lib/hermes-home.mjs'
+import { createInterface } from 'node:readline'
+import { resolveHermesHome, findHermesHomes } from './lib/hermes-home.mjs'
+import { preflight, reportPreflight } from './lib/preflight.mjs'
 import { installPets } from './lib/pets.mjs'
 import { activatePetInConfig } from './lib/config-edit.mjs'
 
@@ -30,19 +32,33 @@ Usage: node install.mjs [--home <path>] [--activate <slug>] [--yes]
   --home <path>       Override HERMES_HOME (the dir that contains config.yaml)
   --activate <slug>   Set this pet active in config.yaml
                       (noir-neko | noir-neko-ascii-fine)
-  --yes, -y           Non-interactive
+  --yes, -y           Accept the auto-detected HERMES_HOME without prompting
+                      (and proceed even if more than one install is found)
   --help, -h          Show this help
 
 Installs the two Noir Neko pets and prints the DevTools snippet that installs
 the Classic Hermes gold theme. The status bar & caduceus extras live in
 advanced/ (see advanced/README.md).`
 
-function main(argv) {
+function confirm(question) {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
+    rl.question(question, (a) => {
+      rl.close()
+      resolve(!/^n/i.test(a.trim()))
+    })
+  })
+}
+
+async function main(argv) {
   const args = parseArgs(argv)
   if (args.help) {
     console.log(HELP)
     return 0
   }
+
+  // Preflight (light — the core install only copies files + edits config.yaml).
+  if (!reportPreflight(preflight({ needsNode: 18 }))) return 1
 
   const home = resolveHermesHome({ explicit: args.home })
   if (!home) {
@@ -51,6 +67,28 @@ function main(argv) {
     return 1
   }
   console.log(`• HERMES_HOME: ${home}`)
+
+  // Confirm the auto-resolved home before the FIRST write — a wrong guess would
+  // edit the wrong install's config.yaml. `--home` is explicit (skip), `--yes`
+  // accepts. If more than one install exists it's a genuine guess: refuse unless
+  // told which. Otherwise, in an interactive shell, ask once.
+  if (!args.home) {
+    const all = findHermesHomes()
+    if (all.length > 1) {
+      console.warn('! More than one Hermes install has a config.yaml:')
+      all.forEach((h, i) => console.warn(`    ${i === 0 ? '→' : ' '} ${h}`))
+      if (!args.yes) {
+        console.error('  Refusing to guess which one. Re-run with --home <path>, or --yes to accept → .')
+        return 1
+      }
+      console.warn(`  --yes: proceeding with ${home}`)
+    } else if (process.stdin.isTTY && !args.yes) {
+      if (!(await confirm(`Install to this Hermes? ${home}  [Y/n] `))) {
+        console.log('Aborted. Pass --home <path> to target a different install.')
+        return 1
+      }
+    }
+  }
 
   // 1) Pets
   const bundled = join(HERE, 'pets')
@@ -97,9 +135,13 @@ function main(argv) {
     console.log('\n' + readFileSync(snippetPath, 'utf8'))
   }
 
-  console.log('\n✓ Core install complete. Restart Hermes to see pets + theme.')
+  // Report only what actually happened — pets are installed here; the theme is
+  // NOT applied by this script (it only printed the instructions above).
+  const petLine = args.activate ? `pets installed, "${args.activate}" activated` : 'pets installed (none activated)'
+  console.log(`\n✓ ${petLine}.`)
+  console.log('  Theme is NOT applied yet →  node theme/apply-theme.mjs   (restarts Hermes once)')
   console.log('  Status bar / caduceus extras: see advanced/README.md')
   return 0
 }
 
-process.exit(main(process.argv.slice(2)))
+main(process.argv.slice(2)).then((code) => process.exit(code))

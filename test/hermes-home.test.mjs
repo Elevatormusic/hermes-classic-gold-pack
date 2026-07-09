@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
-import { resolveHermesHome } from '../lib/hermes-home.mjs'
+import { resolveHermesHome, findHermesHomes } from '../lib/hermes-home.mjs'
 
 const existsFor = (...hits) => (p) => hits.includes(p)
 
@@ -43,4 +43,23 @@ test('darwin uses Application Support', () => {
 test('returns null when nothing has config.yaml', () => {
   const got = resolveHermesHome({ env: { HOME: '/Users/x' }, platform: 'linux', exists: () => false })
   assert.equal(got, null)
+})
+
+test('findHermesHomes flags ambiguity: >1 install with config.yaml', () => {
+  const env = { HERMES_HOME: '/env/hermes', LOCALAPPDATA: 'C:\\la', USERPROFILE: 'C:\\Users\\x' }
+  const la = join('C:\\la', 'hermes')
+  const all = findHermesHomes({
+    env, platform: 'win32', exists: existsFor(join('/env/hermes', 'config.yaml'), join(la, 'config.yaml')),
+  })
+  assert.deepEqual(all, ['/env/hermes', la])
+  assert.equal(all.length > 1, true) // install.mjs refuses to guess in this case
+})
+
+test('findHermesHomes de-dupes when HERMES_HOME equals a default', () => {
+  const la = join('C:\\la', 'hermes')
+  const all = findHermesHomes({
+    env: { HERMES_HOME: la, LOCALAPPDATA: 'C:\\la' }, platform: 'win32',
+    exists: existsFor(join(la, 'config.yaml')),
+  })
+  assert.deepEqual(all, [la]) // one physical dir, not two
 })

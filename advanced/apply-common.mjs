@@ -5,6 +5,7 @@ import { readdirSync, readFileSync, writeFileSync, copyFileSync, mkdirSync, exis
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
+import { preflight, reportPreflight } from '../lib/preflight.mjs'
 
 const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
 const COMMON_DIR = dirname(fileURLToPath(import.meta.url)) // repo/advanced
@@ -109,7 +110,11 @@ export function applyTier({ scriptDir, patchName, tier, label }) {
     console.warn('! Could not read git HEAD; proceeding.')
   }
 
-  // Preflight: a running Hermes locks release/win-unpacked and breaks the build.
+  // Preflight up front: `git` is needed for the patch step; a build also needs
+  // apps/desktop deps + free disk. Surface all blockers before we touch files.
+  if (!reportPreflight(preflight({ repo, needsBuild: args.build, checkGit: true }))) return 1
+
+  // A running Hermes locks release/win-unpacked and breaks the build.
   if (args.build) {
     const running = hermesRunning()
     if (running === true) {

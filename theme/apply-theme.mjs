@@ -22,9 +22,12 @@ import { spawn, spawnSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
+import { preflight } from '../lib/preflight.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SNIPPET = readFileSync(join(HERE, 'install-theme.js'), 'utf8')
+const THEME_KEY = 'hermes-desktop-theme-v2'
+const THEME_VALUE = 'hermes-classic-gold'
 
 function parseArgs(argv) {
   const a = { port: 9222, exe: undefined, relaunch: true, manual: false }
@@ -141,11 +144,46 @@ function evaluateSnippet(wsUrl, expression, timeoutMs = 15000) {
   })
 }
 
+// Evaluate an expression and RESOLVE WITH ITS VALUE (returnByValue) — used to
+// read localStorage back after the snippet runs, to confirm the theme persisted.
+function evaluateValue(wsUrl, expression, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(wsUrl)
+    const to = setTimeout(() => {
+      try { ws.close() } catch {}
+      reject(new Error('CDP timeout'))
+    }, timeoutMs)
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression, returnByValue: true } }))
+    })
+    ws.addEventListener('message', (ev) => {
+      let msg
+      try { msg = JSON.parse(typeof ev.data === 'string' ? ev.data : '') } catch { return }
+      if (msg.id !== 1) return
+      clearTimeout(to)
+      try { ws.close() } catch {}
+      if (msg.error || msg.result?.exceptionDetails) {
+        reject(new Error(msg.error?.message || 'evaluate raised an exception'))
+        return
+      }
+      resolve(msg.result?.result?.value ?? null)
+    })
+    ws.addEventListener('error', () => {
+      clearTimeout(to)
+      reject(new Error('WebSocket error'))
+    })
+  })
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2))
 
   if (args.manual) return manualFallback('--manual requested')
   if (process.platform !== 'win32') return manualFallback('auto install is Windows-only for now')
+
+  // Preflight: the CDP driver needs a global WebSocket (Node 22+).
+  const pf = preflight({ needsNode: 22 })
+  if (!pf.ok) return manualFallback(pf.problems.join('; '))
 
   const exe = hermesExe(args)
   if (!exe) return manualFallback('could not find Hermes.exe — pass --exe <path>')
@@ -162,24 +200,42 @@ async function main() {
     launch(exe, [`--remote-debugging-port=${args.port}`])
     if (!(await waitForPort(args.port))) throw new Error(`debug port ${args.port} never bound`)
 
-    // 3. Find the app window and run the pack's own snippet in it. A freshly
-    //    rebuilt app can reload/replace the page mid-evaluate on its first
-    //    launch (first-run bootstrap), so retry once after a short settle
-    //    before giving up to the manual fallback.
-    let applied = false
-    for (let attempt = 1; attempt <= 2 && !applied; attempt++) {
+    // 3. Run the pack's own snippet, then VERIFY the theme value actually
+    //    persisted by reading localStorage back over CDP — don't print ✓ off a
+    //    fixed delay. A freshly-rebuilt app can reload/replace the page
+    //    mid-evaluate on first launch, and the snippet itself reloads, so retry
+    //    the whole apply+verify once before giving up to the manual fallback.
+    let verified = false
+    for (let attempt = 1; attempt <= 2 && !verified; attempt++) {
       const target = await pickPageTarget(args.port)
       if (!target) throw new Error('no app window target found on the debug port')
       try {
         await evaluateSnippet(target.webSocketDebuggerUrl, SNIPPET)
-        applied = true
       } catch (e) {
         if (attempt === 2) throw e
         console.warn(`! evaluate failed (${e.message}); app is likely still initializing — retrying once…`)
         await sleep(2000)
+        continue
+      }
+      // The snippet reloaded the page — re-pick the new target and read back.
+      await sleep(1000)
+      let value = null
+      try {
+        const vt = await pickPageTarget(args.port)
+        if (vt) value = await evaluateValue(vt.webSocketDebuggerUrl, `localStorage.getItem(${JSON.stringify(THEME_KEY)})`)
+      } catch {
+        // read failed — treat as unconfirmed and retry / fall back
+      }
+      if (value === THEME_VALUE) {
+        verified = true
+      } else if (attempt === 2) {
+        throw new Error(`theme did not persist (${THEME_KEY} read back as ${JSON.stringify(value)})`)
+      } else {
+        console.warn(`! theme not confirmed yet (got ${JSON.stringify(value)}); retrying…`)
+        await sleep(1500)
       }
     }
-    console.log('✓ Theme snippet applied and written to localStorage.')
+    console.log(`✓ Theme applied and verified (${THEME_KEY} = ${THEME_VALUE}).`)
 
     // 4. Close the debug instance (never leave the port open) and restore Hermes.
     killHermes()

@@ -1,13 +1,14 @@
 // Shared logic for the advanced apply scripts (status bar + caduceus extras).
 // Each tier's apply-*.mjs is a thin wrapper around applyTier().
 import { execFileSync, spawnSync } from 'node:child_process'
-import { readdirSync, readFileSync, copyFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, copyFileSync, mkdirSync, existsSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
 import { preflight, reportPreflight } from '../lib/preflight.mjs'
 import { recordApplied, appendManifest } from '../lib/pack-stamp.mjs'
-import { resolveAgentRepo } from '../lib/agent-repo.mjs'
+import { resolveAgentRepo, hermesExePath } from '../lib/agent-repo.mjs'
+import { collectLogs, formatLogs } from '../scripts/diagnostics.mjs'
 
 const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
 const COMMON_DIR = dirname(fileURLToPath(import.meta.url)) // repo/advanced
@@ -88,6 +89,53 @@ function recordInstall(tier, head, via, rels, additiveOnly) {
     console.log('• Recorded pack stamp + manifest.')
   } catch {
     // best-effort — never fail the install over a record write
+  }
+}
+
+/** Run `npm run pack`, self-healing once: a mid-build relaunch can re-lock
+ *  release/win-unpacked, so quit Hermes and retry a single time. (Issue #3 §6.) */
+function packWithRetry(desktop) {
+  const run = () => spawnSync('npm', ['run', 'pack'], { cwd: desktop, stdio: 'inherit', shell: true }).status === 0
+  if (run()) return true
+  if (hermesRunning() === true) {
+    console.warn('! Hermes is running again — quitting it and retrying the build once…')
+    try {
+      spawnSync('taskkill', ['/F', '/IM', 'Hermes.exe'], { stdio: 'ignore' })
+    } catch {
+      // best-effort
+    }
+  } else {
+    console.warn('! pack failed — retrying once…')
+  }
+  return run()
+}
+
+/** After a green pack, sanity-check that it actually landed and the status bar's
+ *  IPC exists (else RAM/VRAM reads blank with no error — issue #2). (Issue #3 §6.) */
+function verifyBuild(repo, buildStartMs, tier) {
+  const exe = hermesExePath(repo)
+  try {
+    if (!existsSync(exe)) {
+      console.warn(`! build output not found: ${exe} — did the pack produce win-unpacked?`)
+    } else if (statSync(exe).mtimeMs + 1000 < buildStartMs) {
+      console.warn('! Hermes.exe is older than this build — the pack may have silently no-opped.')
+    }
+  } catch {
+    // best-effort
+  }
+  if (tier === 'statusbar') {
+    try {
+      const controls = join(repo, 'apps', 'desktop', 'src', 'app', 'shell', 'statusbar-controls.tsx')
+      const main = join(repo, 'apps', 'desktop', 'electron', 'main.cjs')
+      const usesBridge = existsSync(controls) && readFileSync(controls, 'utf8').includes('getSystemResources')
+      const hasHandler = existsSync(main) && readFileSync(main, 'utf8').includes('hermes:system-resources')
+      if (usesBridge && !hasHandler) {
+        console.warn("! statusbar reads window.hermesDesktop.getSystemResources but electron/main.cjs has no")
+        console.warn("  'hermes:system-resources' handler — RAM/VRAM will read blank. See ai/brokenupdatefix.md.")
+      }
+    } catch {
+      // best-effort
+    }
   }
 }
 
@@ -219,11 +267,19 @@ export function applyTier({ scriptDir, patchName, tier, label }) {
   // 3) build
   if (args.build) {
     console.log('• Building (npm run pack). Hermes must be FULLY quit…')
-    const b = spawnSync('npm', ['run', 'pack'], { cwd: join(repo, 'apps', 'desktop'), stdio: 'inherit', shell: true })
-    if (b.status !== 0) {
+    const desktop = join(repo, 'apps', 'desktop')
+    const buildStart = Date.now()
+    if (!packWithRetry(desktop)) {
       console.error('✗ pack failed (is Hermes quit? are apps/desktop deps installed?).')
+      const logs = collectLogs(resolveHermesHome({}))
+      if (logs.length) {
+        console.error('\n── recent Hermes logs (may help) ──')
+        console.error(formatLogs(logs))
+      }
+      console.error('\nSee ai/brokenupdatefix.md.')
       return 1
     }
+    verifyBuild(repo, buildStart, tier)
     console.log('✓ Packed. Relaunch Hermes.')
     console.log('')
     console.log('▶ IMPORTANT — keep this through Hermes updates:')

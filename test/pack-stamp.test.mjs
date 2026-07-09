@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  recordApplied, readStamp, clearApplied, appendManifest, readManifest, classifyState, TIER_SENTINELS,
+  recordApplied, readStamp, clearApplied, appendManifest, readManifest, classifyState, formatReceipt, TIER_SENTINELS,
 } from '../lib/pack-stamp.mjs'
 
 function tmp() {
@@ -51,6 +51,21 @@ test('appendManifest accumulates undo receipts', () => {
     assert.equal(m.entries.length, 2)
     assert.equal(m.entries[0].type, 'pet')
     assert.equal(m.entries[1].priorSlug, 'old')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('formatReceipt: null when empty, lines with undo when applied', () => {
+  const home = tmp()
+  try {
+    assert.equal(formatReceipt(home), null)
+    recordApplied(home, 'pets', { slugs: ['a', 'b'], activated: 'a', previousSlug: 'old' }, { nowIso: NOW })
+    recordApplied(home, 'theme', { value: 'hermes-classic-gold', mode: 'dark', priorTheme: 'nous', priorMode: 'light' }, { nowIso: NOW })
+    const r = formatReceipt(home)
+    assert.match(r, /node scripts\/uninstall\.mjs/)
+    assert.match(r, /pets: a, b .*was: old/)
+    assert.match(r, /theme: hermes-classic-gold.*reverts to nous/)
   } finally {
     rmSync(home, { recursive: true, force: true })
   }

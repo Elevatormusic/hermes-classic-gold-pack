@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
 import { preflight, reportPreflight } from '../lib/preflight.mjs'
-import { recordApplied, appendManifest } from '../lib/pack-stamp.mjs'
+import { recordApplied, appendManifest, formatReceipt } from '../lib/pack-stamp.mjs'
 import { resolveAgentRepo, hermesExePath } from '../lib/agent-repo.mjs'
 import { collectLogs, formatLogs } from '../scripts/diagnostics.mjs'
 
@@ -293,6 +293,12 @@ export function applyTier({ scriptDir, patchName, tier, label }) {
     console.log('  • If an update ever leaves it broken:  see ai/brokenupdatefix.md')
   } else {
     console.log('• Skipped build (--no-build). Run: cd apps/desktop && npm run pack (Hermes quit).')
+  }
+  try {
+    const receipt = formatReceipt(resolveHermesHome({}))
+    if (receipt) console.log('\n' + receipt)
+  } catch {
+    // best-effort — a receipt is informational
   }
   return 0
 }

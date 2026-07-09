@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 import { resolveHermesHome, findHermesHomes } from './lib/hermes-home.mjs'
 import { preflight, reportPreflight } from './lib/preflight.mjs'
-import { recordApplied, appendManifest, classifyState } from './lib/pack-stamp.mjs'
+import { recordApplied, appendManifest, classifyState, formatReceipt } from './lib/pack-stamp.mjs'
 import { resolveAgentRepo } from './lib/agent-repo.mjs'
 import { installPets } from './lib/pets.mjs'
 import { activatePetInConfig } from './lib/config-edit.mjs'
@@ -237,6 +237,9 @@ async function main(argv) {
   console.log(`\n✓ ${parts.join('; ')}.`)
   if (args.theme === undefined) console.log('  Theme is NOT applied yet →  node theme/apply-theme.mjs   (restarts Hermes once)')
   if (!args.advanced.length) console.log('  Status bar / caduceus extras: node install.mjs --advanced statusbar,caduceus   (or see advanced/README.md)')
+
+  const receipt = formatReceipt(home)
+  if (receipt) console.log('\n' + receipt)
   return 0
 }
 

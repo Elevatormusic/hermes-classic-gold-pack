@@ -16,14 +16,24 @@
 //
 // If anything fails, see ai/brokenupdatefix.md.
 import { execFileSync, spawnSync, spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from './lib/hermes-home.mjs'
 import { resolveAgentRepo } from './lib/agent-repo.mjs'
+import { classifyState } from './lib/pack-stamp.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const isWin = process.platform === 'win32'
+const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
+
+function gitHead(repo) {
+  try {
+    return execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  } catch {
+    return null
+  }
+}
 
 function parseArgs(argv) {
   const a = { repo: undefined, branch: undefined, update: true, relaunch: true }
@@ -52,19 +62,23 @@ function quitHermes() {
 
 /** Which tiers did a previous install apply? Read the pack stamp; default to
  *  statusbar only (caduceus is opt-in) so we never add a tier the user didn't want. */
-function appliedTiers() {
-  const tiers = ['statusbar']
+function detectTiers(repo, home) {
+  const set = new Set()
   try {
-    const home = resolveHermesHome({})
-    const stampPath = home && join(home, 'hermes-classic-gold-pack.json')
-    if (stampPath && existsSync(stampPath)) {
-      const stamp = JSON.parse(readFileSync(stampPath, 'utf8'))
-      if (stamp?.applied?.caduceus) tiers.push('caduceus')
+    // Prefer the LIVE source (via classifyState sentinels) — this catches
+    // hand-reconciled installs that never wrote a stamp, so caduceus isn't
+    // silently dropped (issue #3). MUST run BEFORE `hermes update` wipes source.
+    const st = classifyState({ repo, home, base: BASE, agentHead: gitHead(repo) })
+    for (const [tier, state] of Object.entries(st.tiers)) {
+      if (state === 'applied' || state === 'diverged') set.add(tier) // edits present now
     }
+    const a = st.stamp?.applied || {}
+    if (a.statusbar) set.add('statusbar')
+    if (a.caduceus) set.add('caduceus')
   } catch {
-    // no stamp — statusbar only is the safe default
+    // fall through to the safe default
   }
-  return tiers
+  return set.size ? [...set] : ['statusbar']
 }
 
 const TIER_SCRIPT = {
@@ -80,6 +94,12 @@ function main() {
     console.error(`✗ Not a hermes-agent checkout: ${repo}\n  Pass --repo <path>.`)
     return 1
   }
+
+  // Detect which tiers to re-apply NOW, while the source still has them — after
+  // `hermes update` does its `git reset --hard`, the customizations are gone.
+  const home = resolveHermesHome({})
+  const tiers = detectTiers(repo, home)
+  console.log(`• Installed tiers to re-apply after the update: ${tiers.join(', ')}`)
 
   // Building needs Hermes fully quit (it locks the packaged app).
   if (hermesRunning() === true) {
@@ -113,13 +133,22 @@ function main() {
     console.log('• Skipping Hermes update (--no-update) — re-applying the pack to the current checkout.')
   }
 
-  // 2) re-apply each previously-installed tier (stage only; single build after).
-  const tiers = appliedTiers()
+  // 2) re-apply the tiers detected above (before the update). On a diverged
+  //    checkout the apply scripts reconcile-or-REFUSE (never blind-copy), so a
+  //    refusal here is safe — it means "reconcile via ai/repair.md", not a regress.
+  const newHead = gitHead(repo)
+  if (newHead && newHead !== BASE) {
+    console.warn(`! Updated Hermes (${newHead.slice(0, 7)}) differs from the pack base (${BASE.slice(0, 7)}) —`)
+    console.warn("  a tier that can't be reconciled cleanly will refuse rather than regress your install.")
+  }
   console.log(`• Re-applying tiers: ${tiers.join(', ')}`)
   for (const tier of tiers) {
     const r = spawnSync('node', [TIER_SCRIPT[tier], '--repo', repo, '--no-build'], { stdio: 'inherit' })
     if (r.status !== 0) {
-      console.error(`✗ Re-applying ${tier} failed. See ai/brokenupdatefix.md.`)
+      console.error(
+        `✗ Re-applying ${tier} failed — likely a version divergence. Reconcile via ai/repair.md, ` +
+          'then re-run with --no-update. (See ai/brokenupdatefix.md.)'
+      )
       return 1
     }
   }

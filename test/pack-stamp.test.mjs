@@ -117,6 +117,25 @@ test('classifyState: reverted (stamped, but an update wiped the sentinel)', () =
   }
 })
 
+test('classifyState: caduceus detected from the Backdrop sentinel (not stock intro WORDMARK)', () => {
+  const home = tmp()
+  const repo = tmp()
+  const sen = TIER_SENTINELS.caduceus
+  mkdirSync(join(repo, sen.file, '..'), { recursive: true })
+  try {
+    writeFileSync(join(repo, sen.file), `x\nconst ${sen.marker} = []\n`)
+    let st = classifyState({ repo, home, base: 'B', agentHead: 'B', tiers: ['caduceus'] })
+    assert.equal(st.tiers.caduceus, 'applied')
+    // stock Backdrop (no HERMES_CADUCEUS) → not applied, even though stock intro
+    // has aria-label={WORDMARK} (the old, wrong sentinel).
+    writeFileSync(join(repo, sen.file), 'stock backdrop, aria-label={WORDMARK} lives in intro\n')
+    st = classifyState({ repo, home, base: 'B', agentHead: 'B', tiers: ['caduceus'] })
+    assert.equal(st.tiers.caduceus, 'fresh')
+  } finally {
+    rmSync(home, { recursive: true, force: true }); rmSync(repo, { recursive: true, force: true })
+  }
+})
+
 test('classifyState: diverged (sentinel present but HEAD != BASE)', () => {
   const home = tmp()
   const repo = fakeRepo(true)

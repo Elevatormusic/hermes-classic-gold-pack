@@ -1,12 +1,12 @@
 # Installs a background check that, at logon (and hourly if possible), notifies
-# you when a Hermes update reverted the Classic Gold pack. Read-only — it never
+# you when a Hermes update reverted the Classic Gold pack. Read-only - it never
 # rebuilds or kills Hermes. Run from a NORMAL (non-admin) PowerShell:
 #
 #   powershell -ExecutionPolicy Bypass -File advanced\watcher\register-watcher.ps1
 #
 # It prefers a Scheduled Task (logon + hourly). If Windows requires elevation for
 # that on your machine (Register-ScheduledTask -> 0x80070005 Access denied), it
-# falls back to an admin-free Startup-folder logon check automatically — so this
+# falls back to an admin-free Startup-folder logon check automatically - so this
 # never needs an admin prompt. For the hourly check too, re-run from an elevated
 # PowerShell. Remove either with unregister-watcher.ps1.
 

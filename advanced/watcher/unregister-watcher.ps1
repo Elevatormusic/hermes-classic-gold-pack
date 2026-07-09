@@ -1,4 +1,4 @@
-# Removes the Classic Gold re-apply watcher — both the Scheduled Task and the
+# Removes the Classic Gold re-apply watcher - both the Scheduled Task and the
 # Startup-folder fallback, whichever register-watcher.ps1 installed.
 #   powershell -ExecutionPolicy Bypass -File advanced\watcher\unregister-watcher.ps1
 $taskName = 'HermesClassicGold-ReapplyWatcher'
@@ -9,7 +9,7 @@ try {
   Write-Host "Removed scheduled task '$taskName'."
   $removed = $true
 } catch {
-  # no task (or it needs elevation to remove) — fall through to the Startup check
+  # no task (or it needs elevation to remove) - fall through to the Startup check
 }
 
 $vbs = Join-Path ([Environment]::GetFolderPath('Startup')) 'HermesClassicGold-ReapplyWatcher.vbs'

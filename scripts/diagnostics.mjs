@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
+import { classifyState } from '../lib/pack-stamp.mjs'
 
 const REPO = 'Elevatormusic/hermes-classic-gold-pack'
 const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
@@ -18,7 +19,10 @@ export function collect({ env = process.env, platform = process.platform } = {})
   if (hermesHome) {
     const repo = join(hermesHome, 'hermes-agent')
     try {
-      agentHead = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+      agentHead = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'], // hush git's "fatal:" on a non-checkout
+      }).trim()
     } catch {
       // no git / not a checkout — leave null
     }
@@ -104,6 +108,47 @@ export function formatDiagnostics(info) {
     .join('\n')
 }
 
+const STATE_ACTION = {
+  fresh: 'not installed',
+  applied: 'installed ✓',
+  reverted: 'REVERTED by a Hermes update → re-apply (node update-hermes.mjs --no-update)',
+  diverged: 'diverged Hermes version → reconcile (see ai/repair.md)',
+}
+
+/**
+ * Render a per-component install status using the pack stamp + live source
+ * sentinels (classifyState). Tells the user what's applied and the next action.
+ */
+export function formatStatus(info, { base = BASE } = {}) {
+  const home = info.hermesHome
+  if (!home) return '### Classic Gold status\n- HERMES_HOME: (not found — pass --home or install Hermes)'
+  const repo = join(home, 'hermes-agent')
+  const state = classifyState({ repo, home, base, agentHead: info.agentHead })
+  const stamp = state.stamp
+  const lines = [
+    '### Classic Gold status',
+    `- HERMES_HOME: ${home}`,
+    `- on base ${base.slice(0, 7)}: ${state.onBase ? 'yes' : `no (HEAD ${info.agentHead ? info.agentHead.slice(0, 7) : '?'})`}`,
+  ]
+  for (const [tier, st] of Object.entries(state.tiers)) {
+    const via = stamp?.applied?.[tier]?.via
+    lines.push(`- ${tier}: ${st}${via ? ` (via ${via})` : ''} — ${STATE_ACTION[st]}`)
+  }
+  const pets = stamp?.applied?.pets
+  lines.push(
+    pets
+      ? `- pets: installed [${(pets.slugs || []).join(', ')}]${pets.activated ? `, active: ${pets.activated}` : ''}`
+      : '- pets: not recorded'
+  )
+  const theme = stamp?.applied?.theme
+  lines.push(
+    theme
+      ? `- theme: applied (${theme.value})`
+      : '- theme: unknown (localStorage-only — run node theme/apply-theme.mjs to (re)apply)'
+  )
+  return lines.join('\n')
+}
+
 /** Build a prefilled GitHub "New Issue" URL. Pure. */
 export function buildIssueUrl(info, { title, error } = {}) {
   const body = [
@@ -126,6 +171,13 @@ if (isMain) {
   const error = errIdx !== -1 ? process.argv[errIdx + 1] : undefined
   const wantLogs = process.argv.includes('--logs')
   const info = collect()
+
+  // `status` — per-component install state + recommended next action.
+  if (process.argv.includes('status')) {
+    console.log(formatStatus(info))
+    process.exit(0)
+  }
+
   console.log(formatDiagnostics(info))
   if (wantLogs) {
     console.log('\n### Recent Hermes logs  (review before sharing — may contain prompts/paths)')

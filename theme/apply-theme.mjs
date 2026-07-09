@@ -162,10 +162,23 @@ async function main() {
     launch(exe, [`--remote-debugging-port=${args.port}`])
     if (!(await waitForPort(args.port))) throw new Error(`debug port ${args.port} never bound`)
 
-    // 3. Find the app window and run the pack's own snippet in it.
-    const target = await pickPageTarget(args.port)
-    if (!target) throw new Error('no app window target found on the debug port')
-    await evaluateSnippet(target.webSocketDebuggerUrl, SNIPPET)
+    // 3. Find the app window and run the pack's own snippet in it. A freshly
+    //    rebuilt app can reload/replace the page mid-evaluate on its first
+    //    launch (first-run bootstrap), so retry once after a short settle
+    //    before giving up to the manual fallback.
+    let applied = false
+    for (let attempt = 1; attempt <= 2 && !applied; attempt++) {
+      const target = await pickPageTarget(args.port)
+      if (!target) throw new Error('no app window target found on the debug port')
+      try {
+        await evaluateSnippet(target.webSocketDebuggerUrl, SNIPPET)
+        applied = true
+      } catch (e) {
+        if (attempt === 2) throw e
+        console.warn(`! evaluate failed (${e.message}); app is likely still initializing — retrying once…`)
+        await sleep(2000)
+      }
+    }
     console.log('✓ Theme snippet applied and written to localStorage.')
 
     // 4. Close the debug instance (never leave the port open) and restore Hermes.

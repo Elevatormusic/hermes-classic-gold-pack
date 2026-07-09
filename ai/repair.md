@@ -36,10 +36,19 @@ PROCEDURE — do NOT blindly overwrite my files:
      types/hermes.ts, SPLICE IN the pack's added declarations (getSystemResources;
      the UsageStats telemetry fields) — never replace the whole file, or you may
      drop a newer bridge API (e.g. window.hermes.zoom) and break `tsc`.
-  4. Delete any orphan app/shell/hooks/use-system-resources.ts — the current pack
-     folds system resources into the IPC, not a renderer hook. A leftover file
-     referencing the old API will fail the build.
-  5. Show me a diff of what you changed before writing.
+  4. use-system-resources.ts is CONDITIONAL — check before deleting. The current
+     pack folds system resources into the IPC, so if you migrated
+     statusbar-controls.tsx to `window.hermesDesktop.getSystemResources`, the old
+     `app/shell/hooks/use-system-resources.ts` is a dangling orphan → delete it.
+     BUT if your reconciled statusbar-controls.tsx still
+     `import { useSystemResources } from '@/app/shell/hooks/use-system-resources'`
+     and calls it, the file is NOT orphan — deleting it breaks the build. Only
+     remove it once nothing imports it.
+  5. If you kept the renderer-hook design, make sure the IPC it reads actually
+     EXISTS: `electron/main.cjs` must have the `hermes:system-resources` handler
+     and `electron/preload.cjs` the `getSystemResources` bridge — otherwise
+     RAM/VRAM silently reads blank with no error (see brokenupdatefix.md).
+  6. Show me a diff of what you changed before writing.
 
 THEN build (Hermes fully quit):
   cd apps/desktop && npm run pack

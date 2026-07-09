@@ -63,12 +63,18 @@ node advanced/extras-caduceus/apply-caduceus.mjs --repo "<path-to>/hermes-agent"
    install's modified/staged files don't force `git apply --3way` into
    "does not match index" and the risky full-file fallback.
 5. `git apply --3way` the shipped patch. **If it rejects**, fall back per file:
-   copy the full post-edit file from `<tier>/files/` — **except** the
-   type-declaration files (`global.d.ts`, `types/hermes.ts`), which are instead
-   3-way-merged from a tiny additive patch in `<tier>/additive/`. A full copy of
-   those could drop a newer bridge API (e.g. `window.hermes.zoom`) on a diverged
-   version and break `tsc` (thanks @AnikaWilliams,
-   [#2](https://github.com/Elevatormusic/hermes-classic-gold-pack/issues/2)).
+   - **On the base commit:** copy the full post-edit file from `<tier>/files/` —
+     **except** the type-declaration files (`global.d.ts`, `types/hermes.ts`),
+     which are 3-way-merged from a tiny additive patch in `<tier>/additive/`. A
+     full copy of those could drop a newer bridge API (e.g. `window.hermes.zoom`)
+     and break `tsc`.
+   - **On a DIVERGED checkout (HEAD ≠ BASE):** it **refuses to blind-copy** and
+     **stops before building** — a base-file copy would silently overwrite your
+     version's real code (and any `repair.md` reconciliation). It lists the
+     unresolved files and points you to `repair.md`. Pass `--force-copy` to
+     overwrite anyway. (Thanks @AnikaWilliams,
+     [#2](https://github.com/Elevatormusic/hermes-classic-gold-pack/issues/2) /
+     [#3](https://github.com/Elevatormusic/hermes-classic-gold-pack/issues/3).)
 6. Unless `--no-build`, run `npm run pack` in `apps/desktop`, then write a pack
    stamp to `HERMES_HOME/hermes-classic-gold-pack.json` (read by
    `scripts/diagnostics.mjs`) and tell you to relaunch.

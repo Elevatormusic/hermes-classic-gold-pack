@@ -28,10 +28,11 @@ function packVersion() {
 }
 
 function parse(argv) {
-  const a = { repo: undefined, build: true }
+  const a = { repo: undefined, build: true, force: false }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--repo') a.repo = argv[++i]
     else if (argv[i] === '--no-build') a.build = false
+    else if (argv[i] === '--force-copy') a.force = true
   }
   return a
 }
@@ -136,14 +137,19 @@ export function applyTier({ scriptDir, patchName, tier, label }) {
   //    3-way would have worked. Resetting lets more installs take the surgical
   //    path. (Issue #2, gotcha 2.) Originals are already backed up as .orig
   //    above. Best-effort — ignore paths git doesn't track.
+  // `checkout HEAD --` (not bare `checkout --`) resets BOTH index and worktree to
+  // HEAD; a prior install's STAGED files are the dirty-index case gotcha 2 is
+  // about, and bare checkout (restore-from-index) wouldn't clear them.
   const tracked = rels.filter(rel => existsSync(join(repo, rel)))
-  if (tracked.length) spawnSync('git', ['-C', repo, 'checkout', '--', ...tracked], { stdio: 'ignore' })
+  if (tracked.length) spawnSync('git', ['-C', repo, 'checkout', 'HEAD', '--', ...tracked], { stdio: 'ignore' })
 
   // 3) patch, else copy (per file, with .d.ts safety)
   const patch = join(scriptDir, patchName)
   const r = spawnSync('git', ['-C', repo, 'apply', '--3way', '--whitespace=nowarn', patch], { stdio: 'inherit' })
   if (r.status !== 0) {
-    console.warn('! git apply failed; falling back to per-file copy.')
+    const diverged = Boolean(head && head !== BASE)
+    console.warn(`! git apply failed; falling back per file${diverged ? ' (diverged checkout)' : ''}.`)
+    const unresolved = []
     for (const rel of rels) {
       const additive = ADDITIVE_ONLY[rel]
       if (additive) {
@@ -155,16 +161,43 @@ export function applyTier({ scriptDir, patchName, tier, label }) {
           { stdio: 'inherit' }
         )
         if (ap.status !== 0) {
-          console.warn(
-            `! Could not merge ${rel} additively on your version — NOT overwriting it.\n` +
-              '  Add the declarations by hand or run the AI repair prompt. See ai/brokenupdatefix.md.'
-          )
+          // Fail fast: a rejected --3way can leave <<<<<<< markers that would
+          // break tsc minutes into the build. Restore the clean file (from HEAD,
+          // since --3way dirtied the index) and flag it so we stop BEFORE
+          // building. (Issue #3.)
+          spawnSync('git', ['-C', repo, 'checkout', 'HEAD', '--', rel], { stdio: 'ignore' })
+          unresolved.push(rel)
         }
+        continue
+      }
+      // Non-declaration file. On a DIVERGED checkout the pack's base copy would
+      // overwrite the user's version's real code (and any repair.md
+      // reconciliation) — silent data loss. Refuse unless --force-copy. On the
+      // base version a copy is safe (the pack file IS that version). (Issue #3.)
+      if (diverged && !args.force) {
+        unresolved.push(rel)
         continue
       }
       const target = join(repo, rel)
       mkdirSync(dirname(target), { recursive: true })
       copyFileSync(join(fallbackRoot, rel), target)
+    }
+    if (unresolved.length) {
+      // Leave a CLEAN tree for repair.md — undo any partial `--3way` application
+      // (merged files / conflict markers) so the user reconciles from pristine.
+      // From HEAD, since --3way dirtied the index.
+      if (tracked.length) spawnSync('git', ['-C', repo, 'checkout', 'HEAD', '--', ...tracked], { stdio: 'ignore' })
+      console.error(
+        `\n✗ ${unresolved.length} file(s) can't be applied cleanly on your Hermes version ` +
+          `(HEAD ${String(head).slice(0, 7)} != base ${BASE.slice(0, 7)}):`
+      )
+      for (const u of unresolved) console.error(`    ${u}`)
+      console.error(
+        "  Blind-copying the pack's base files would overwrite your version's code.\n" +
+          '  -> Reconcile with ai/repair.md (recommended), or re-run with --force-copy to\n' +
+          '     overwrite anyway. No build was run. See ai/brokenupdatefix.md.'
+      )
+      return 1
     }
   }
   console.log(`✓ ${label} files staged.`)

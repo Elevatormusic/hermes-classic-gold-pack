@@ -37,15 +37,28 @@ jobs:
             if (['OWNER', 'MEMBER', 'COLLABORATOR'].includes(assoc)) return;
             if (author.endsWith('[bot]')) return;
 
-            // --- signals ---
+            // --- delivery signals (the "run my fix" malware pattern needs a way to
+            //     actually deliver a payload; prose alone is not a payload) ---
             // Non-image file attachment (zip/exe/etc go to /files/, images to /assets/).
             const hasFileAttachment = /user-attachments\/files\//i.test(body);
-            const hasArchiveOrExe = /\.(zip|exe|msi|scr|bat|cmd|ps1|vbs|7z|rar|dmg|pkg|apk|jar)\b/i.test(body);
-            const dropperCmd = /\b(curl|wget|iwr|invoke-webrequest|certutil|bitsadmin)\b|base64\s+-d|powershell\s+-e|-enc\s|frombase64string/i.test(body);
+            // An archive/executable as a DOWNLOAD LINK — not merely a filename named in
+            // prose. A bug report mentioning `Hermes.exe`, `taskkill`, or a `.ps1` helper
+            // is legitimate and must NOT trip this.
+            const hasArchiveLink = /\bhttps?:\/\/\S+\.(zip|exe|msi|scr|bat|cmd|vbs|7z|rar|dmg|pkg|apk|jar)(?:[?#]|\b)/i.test(body);
+            // A download-and-run dropper: LOLBins, base64-decode, or a piped fetch→shell.
+            // (Bare `curl`/`wget` mentions are common in real reports, so require the pipe.)
+            const dropperCmd = /\b(certutil|bitsadmin|mshta)\b|frombase64string|base64\s+-d|powershell\s+-e(?:nc)?\b|-enc\s|(?:curl|wget|iwr|invoke-webrequest)\b[^\n|]*\|\s*(?:sh|bash|iex|powershell)/i.test(body);
+
+            // No delivery mechanism ⇒ not the malware pattern, however technical the
+            // prose (mentions of .exe, debug ports, "run this", etc. are fine). Bail
+            // out so detailed bug reports from non-collaborators are never flagged.
+            if (!hasFileAttachment && !hasArchiveLink && !dropperCmd) return;
+
+            // Social-engineering phrases only AGGRAVATE once a delivery signal exists.
             const phrases = [
-              'remote debugging port', 'debugging port', 'bypass', 'approval gate',
-              'approval prompt', 'disable the', 'turn off the', 'hidden fix', 'just run',
-              'run this', 'trust me', 'works for me', 'hermes_fix', 'one-click', 'no questions',
+              'just run this', 'run this attachment', 'trust me', 'no questions asked',
+              'hidden fix', 'hermes_fix', 'one-click', 'works for me',
+              'bypass the approval', 'disable the approval', 'turn off the approval',
             ];
             const phraseHits = phrases.filter((s) => lower.includes(s));
 
@@ -58,7 +71,7 @@ jobs:
 
             let score = 0;
             if (hasFileAttachment) score += 3;
-            if (hasArchiveOrExe) score += 3;
+            if (hasArchiveLink) score += 3;
             if (dropperCmd) score += 3;
             score += phraseHits.length;
             if (ageDays < 7) score += 2;
@@ -85,7 +98,7 @@ jobs:
             // 2) leave a visible warning
             const reasons = [
               hasFileAttachment ? 'a file attachment' : null,
-              hasArchiveOrExe ? 'an archive/executable link' : null,
+              hasArchiveLink ? 'an archive/executable download link' : null,
               dropperCmd ? 'a download-and-run command' : null,
               phraseHits.length ? `phrase(s): ${phraseHits.join(', ')}` : null,
               ageDays < 7 ? `a ${Math.round(ageDays)}-day-old account` : null,

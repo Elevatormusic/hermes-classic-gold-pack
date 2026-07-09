@@ -6,3 +6,8 @@ default: true
 MD013: false # line-length — long table rows / prose lines are intentional
 MD040: false # fenced-code-language — the AI-prompt blocks are plain text
 MD028: false # no-blanks-blockquote — blank lines between blockquotes are fine
+# The "blank line around a block" family — noise for dense hand-written docs, and
+# the repo's existing docs already vary here. Keep content over whitespace nits.
+MD022: false # blanks-around-headings
+MD031: false # blanks-around-fences
+MD032: false # blanks-around-lists

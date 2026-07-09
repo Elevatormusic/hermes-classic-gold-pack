@@ -55,15 +55,16 @@ installed (fresh vs re-apply vs diverged) before acting:
 node scripts/diagnostics.mjs status
 ```
 
-> **One-shot option.** The whole install can run as one planned flow:
-> ```bash
-> node install.mjs --advanced statusbar,caduceus --theme --activate noir-neko-ascii-fine --dry-run
-> ```
-> `--dry-run` prints the plan (pets → advanced rebuild → theme) and changes
-> nothing; drop it to execute. It sequences the rebuild before the theme so
-> Hermes restarts once. The tier-by-tier steps below are equivalent if you'd
-> rather run them individually (e.g. to keep the current chat session alive —
-> see the restart caveats in step 3/4).
+**One-shot option.** The whole install can run as one planned flow. `--dry-run`
+prints the plan (pets → advanced rebuild → theme) and changes nothing; drop it to
+execute. It sequences the rebuild before the theme so Hermes restarts once:
+
+```bash
+node install.mjs --advanced statusbar,caduceus --theme --activate noir-neko-ascii-fine --dry-run
+```
+
+The tier-by-tier steps below are equivalent if you'd rather run them individually
+(e.g. to keep the current chat session alive — see the restart caveats in step 3/4).
 
 **2. Core — pets.** Run:
 

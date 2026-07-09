@@ -23,11 +23,13 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
 import { preflight } from '../lib/preflight.mjs'
+import { recordApplied, appendManifest } from '../lib/pack-stamp.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SNIPPET = readFileSync(join(HERE, 'install-theme.js'), 'utf8')
 const THEME_KEY = 'hermes-desktop-theme-v2'
 const THEME_VALUE = 'hermes-classic-gold'
+const MODE_KEY = 'hermes-desktop-mode-v1'
 
 function parseArgs(argv) {
   const a = { port: 9222, exe: undefined, relaunch: true, manual: false }
@@ -200,7 +202,21 @@ async function main() {
     launch(exe, [`--remote-debugging-port=${args.port}`])
     if (!(await waitForPort(args.port))) throw new Error(`debug port ${args.port} never bound`)
 
-    // 3. Run the pack's own snippet, then VERIFY the theme value actually
+    // 3. Capture the user's prior theme + mode BEFORE the snippet overwrites
+    //    them, so uninstall can restore the real values (not a hardcoded 'nous').
+    let priorTheme = null
+    let priorMode = null
+    try {
+      const t0 = await pickPageTarget(args.port)
+      if (t0) {
+        priorTheme = await evaluateValue(t0.webSocketDebuggerUrl, `localStorage.getItem(${JSON.stringify(THEME_KEY)})`)
+        priorMode = await evaluateValue(t0.webSocketDebuggerUrl, `localStorage.getItem(${JSON.stringify(MODE_KEY)})`)
+      }
+    } catch {
+      // best-effort — undo just falls back to defaults if we couldn't read
+    }
+
+    //    Then run the pack's own snippet and VERIFY the theme value actually
     //    persisted by reading localStorage back over CDP — don't print ✓ off a
     //    fixed delay. A freshly-rebuilt app can reload/replace the page
     //    mid-evaluate on first launch, and the snippet itself reloads, so retry
@@ -236,6 +252,18 @@ async function main() {
       }
     }
     console.log(`✓ Theme applied and verified (${THEME_KEY} = ${THEME_VALUE}).`)
+
+    // Record the theme in the stamp + manifest (with the captured prior values
+    // for a faithful uninstall). Best-effort — never fail the install over it.
+    try {
+      const home = resolveHermesHome({})
+      if (home) {
+        recordApplied(home, 'theme', { value: THEME_VALUE, mode: 'dark', priorTheme, priorMode })
+        appendManifest(home, { type: 'theme', keys: [THEME_KEY, MODE_KEY], priorTheme, priorMode })
+      }
+    } catch {
+      // ignore record failures
+    }
 
     // 4. Close the debug instance (never leave the port open) and restore Hermes.
     killHermes()

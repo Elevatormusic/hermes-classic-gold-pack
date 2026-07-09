@@ -1,11 +1,12 @@
 // Shared logic for the advanced apply scripts (status bar + caduceus extras).
 // Each tier's apply-*.mjs is a thin wrapper around applyTier().
 import { execFileSync, spawnSync } from 'node:child_process'
-import { readdirSync, readFileSync, writeFileSync, copyFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, copyFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
 import { preflight, reportPreflight } from '../lib/preflight.mjs'
+import { recordApplied, appendManifest } from '../lib/pack-stamp.mjs'
 
 const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
 const COMMON_DIR = dirname(fileURLToPath(import.meta.url)) // repo/advanced
@@ -62,27 +63,30 @@ function hermesRunning() {
   }
 }
 
-/** Record which pack pieces are applied, where diagnostics.mjs looks for it. */
-function writePackStamp(tier, agentHead) {
+/**
+ * Record the install authoritatively — stamp (state) + manifest (undo receipts)
+ * — on EVERY apply path (patch, copy, --no-build), not just after a build, so
+ * update-hermes / the watcher / uninstall aren't blind. (Issue #3 §3.) Records
+ * per-file .orig backups + the head + method so uninstall can restore safely.
+ */
+function recordInstall(tier, head, via, rels, additiveOnly) {
   try {
     const home = resolveHermesHome({})
     if (!home) return
-    const stampPath = join(home, 'hermes-classic-gold-pack.json')
-    let stamp = { pack: 'hermes-classic-gold-pack', version: packVersion(), agentHead: agentHead || null, applied: {} }
-    if (existsSync(stampPath)) {
-      try {
-        stamp = { ...stamp, ...JSON.parse(readFileSync(stampPath, 'utf8')) }
-      } catch {
-        // corrupt stamp — overwrite fresh
-      }
+    recordApplied(home, tier, { via, agentHead: head }, { version: packVersion(), base: BASE, agentHead: head })
+    for (const rel of rels) {
+      appendManifest(home, {
+        type: 'file',
+        tier,
+        rel,
+        orig: rel + '.orig',
+        agentHead: head,
+        method: additiveOnly[rel] ? 'additive' : via,
+      })
     }
-    stamp.version = packVersion()
-    if (agentHead) stamp.agentHead = agentHead
-    stamp.applied = { ...(stamp.applied || {}), [tier]: new Date().toISOString() }
-    writeFileSync(stampPath, JSON.stringify(stamp, null, 2))
-    console.log(`• Wrote pack stamp: ${stampPath}`)
+    console.log('• Recorded pack stamp + manifest.')
   } catch {
-    // best-effort — never fail the install over a stamp
+    // best-effort — never fail the install over a record write
   }
 }
 
@@ -207,6 +211,10 @@ export function applyTier({ scriptDir, patchName, tier, label }) {
   }
   console.log(`✓ ${label} files staged.`)
 
+  // Record BEFORE building — staging happened regardless of --no-build, so the
+  // stamp/manifest must reflect it on every path (patch or copy).
+  recordInstall(tier, head, r.status === 0 ? 'patch' : 'copy', rels, ADDITIVE_ONLY)
+
   // 3) build
   if (args.build) {
     console.log('• Building (npm run pack). Hermes must be FULLY quit…')
@@ -215,7 +223,6 @@ export function applyTier({ scriptDir, patchName, tier, label }) {
       console.error('✗ pack failed (is Hermes quit? are apps/desktop deps installed?).')
       return 1
     }
-    writePackStamp(tier, head)
     console.log('✓ Packed. Relaunch Hermes.')
     console.log('')
     console.log('▶ IMPORTANT — keep this through Hermes updates:')

@@ -2,12 +2,13 @@
 // install.mjs — core installer: pets + theme snippet.
 // The gold theme installs via a DevTools console paste (there is no file-import
 // API for arbitrary themes); this prints the exact instructions + path.
-import { readFileSync, writeFileSync, copyFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, copyFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 import { resolveHermesHome, findHermesHomes } from './lib/hermes-home.mjs'
 import { preflight, reportPreflight } from './lib/preflight.mjs'
+import { recordApplied, appendManifest } from './lib/pack-stamp.mjs'
 import { installPets } from './lib/pets.mjs'
 import { activatePetInConfig } from './lib/config-edit.mjs'
 
@@ -90,13 +91,22 @@ async function main(argv) {
     }
   }
 
-  // 1) Pets
+  // 1) Pets — note which already existed so uninstall won't delete a pet the
+  //    user had before the pack (Issue #3 §4).
   const bundled = join(HERE, 'pets')
   const petsDir = join(home, 'pets')
+  const bundledSlugs = existsSync(bundled)
+    ? readdirSync(bundled, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
+    : []
+  const preExisting = new Set(bundledSlugs.filter((s) => existsSync(join(petsDir, s))))
   const slugs = installPets(bundled, petsDir)
   console.log(`• Installed pets: ${slugs.join(', ')}  →  ${petsDir}`)
+  for (const slug of slugs) {
+    appendManifest(home, { type: 'pet', slug, dir: join(petsDir, slug), preExisting: preExisting.has(slug) })
+  }
 
   // 2) Optional activation
+  let previousSlug = null
   if (args.activate) {
     if (!slugs.includes(args.activate)) {
       console.error(`✗ --activate "${args.activate}" is not one of: ${slugs.join(', ')}`)
@@ -105,12 +115,16 @@ async function main(argv) {
     const cfgPath = join(home, 'config.yaml')
     try {
       const original = readFileSync(cfgPath, 'utf8')
-      copyFileSync(cfgPath, cfgPath + '.bak')
+      previousSlug = (original.match(/slug:\s*(\S+)/) || [])[1] || null
+      // Never overwrite an existing .bak — the FIRST one is the pristine
+      // pre-pack config; clobbering it on a re-run makes the backup lossy.
+      if (!existsSync(cfgPath + '.bak')) copyFileSync(cfgPath, cfgPath + '.bak')
       const updated = activatePetInConfig(original, args.activate)
       writeFileSync(cfgPath, updated)
       const check = readFileSync(cfgPath, 'utf8')
       const ok = new RegExp(`slug: ${args.activate}\\b`).test(check) && /enabled: true/.test(check)
       if (!ok) throw new Error('post-write validation failed')
+      appendManifest(home, { type: 'config', path: cfgPath, backup: cfgPath + '.bak', priorSlug: previousSlug })
       console.log(`• Activated pet "${args.activate}" in config.yaml (backup: config.yaml.bak)`)
     } catch (err) {
       if (existsSync(cfgPath + '.bak')) copyFileSync(cfgPath + '.bak', cfgPath)
@@ -120,6 +134,9 @@ async function main(argv) {
   } else {
     console.log('• (Pets installed but not activated — pass --activate <slug> or pick one in-app.)')
   }
+
+  // Record pets in the stamp (state), regardless of activation.
+  recordApplied(home, 'pets', { slugs, activated: args.activate || null, previousSlug })
 
   // 3) Theme
   const snippetPath = join(HERE, 'theme', 'install-theme.js')

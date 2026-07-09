@@ -27,3 +27,11 @@ jobs:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: "main"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Repo markdownlint config (relaxes MD013/MD040/MD028 for dense docs).
+          MARKDOWN_CONFIG_FILE: .markdown-lint.yml
+          # Turn off the two noise-only linters for this docs+scripts repo:
+          #  - natural-language (textlint) pedantically rewrites "repo" → "repository"
+          #  - jscpd copy-paste detection flags unavoidable boilerplate similarity
+          # Kept on: gitleaks (secrets), eslint (JS), YAML/actionlint, bash, JSON.
+          VALIDATE_NATURAL_LANGUAGE: false
+          VALIDATE_JSCPD: false

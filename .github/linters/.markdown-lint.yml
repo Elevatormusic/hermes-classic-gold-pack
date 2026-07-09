@@ -1,0 +1,8 @@
+# markdownlint config for Super-Linter.
+# The pack's docs use dense symptom→cause→fix tables and long prose lines by
+# design (a markdown table row can't be wrapped), and some fenced blocks are
+# plain-text copy-paste prompts rather than code. Keep every other rule on.
+default: true
+MD013: false # line-length — long table rows / prose lines are intentional
+MD040: false # fenced-code-language — the AI-prompt blocks are plain text
+MD028: false # no-blanks-blockquote — blank lines between blockquotes are fine

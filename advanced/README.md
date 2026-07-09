@@ -9,9 +9,10 @@
 > - **Hermes must be fully quit** during the build (`npm run pack`), or the
 >   file locks abort it.
 > - **A Hermes app update reverts BOTH tiers** (it rebuilds from a hard `git
->   reset`). Re-apply afterwards — easiest is `node update-hermes.mjs`, which
->   updates Hermes *and* re-applies the pack in one shot. If a re-apply ever
->   fails, see [`ai/brokenupdatefix.md`](../ai/brokenupdatefix.md).
+>   reset`). To update, ask your AI assistant to "update Hermes and re-apply
+>   Classic Gold" ([`ai/update.md`](../ai/update.md)) — it re-applies + self-heals,
+>   no terminal needed. (Terminal equivalent: `node update-hermes.mjs`.) If a
+>   re-apply ever fails, see [`ai/brokenupdatefix.md`](../ai/brokenupdatefix.md).
 > - Patches are generated against the `BASE` commit in
 >   [`apply-common.mjs`](apply-common.mjs) (currently `4d7f8ade`). On a different
 >   version they may not apply cleanly (see *If a patch rejects*).

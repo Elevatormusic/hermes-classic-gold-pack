@@ -91,21 +91,24 @@ entwined sine-snakes that animate as a gold particle trail while Hermes-Agent is
 When Hermes-Agent updates, it replaces the whole app with a fresh copy — so anything
 built *into the app* is wiped, while your own settings and data stay put.
 
-> ### 🔄 Update Hermes-Agent with one command
-> Instead of the in-app **Update** button, run:
-> ```bash
-> node update-hermes.mjs
+> ### 🔄 To update, just ask your AI assistant
+> Instead of the in-app **Update** button, paste this to your assistant (Claude,
+> ChatGPT, etc.) — it updates Hermes-Agent **and** re-applies your theme + status
+> bar, and fixes anything that breaks:
 > ```
-> It updates Hermes-Agent **and** re-applies the status bar + background in one step,
-> so the app never comes back un-themed. (Already updated in-app and lost the theme?
-> Run `node update-hermes.mjs --no-update` to just restore it.)
+> Update my Hermes-Agent and re-apply my Classic Gold theme + status bar.
+> Open github.com/Elevatormusic/hermes-classic-gold-pack, read ai/update.md,
+> and follow it. Self-heal via ai/brokenupdatefix.md before asking me.
+> ```
+> No terminal needed on your end. See [`ai/update.md`](ai/update.md).
+> *(Comfortable in a terminal? `node update-hermes.mjs` does the same thing.)*
 
 | Piece | On a Hermes-Agent update |
 |---|---|
 | 🎨 **Theme** | ✅ stays put (saved in your settings) |
 | 🐾 **Pets** | ✅ survive (saved in your Hermes-Agent folder) |
-| 📊 **Status bar** | 🔁 rebuilt in — use `update-hermes.mjs` (or re-run the install) |
-| 🌀 **Background & loader** | 🔁 rebuilt in — use `update-hermes.mjs` (or re-run the install) |
+| 📊 **Status bar** | 🔁 rebuilt in — ask your assistant to update (or `node update-hermes.mjs`) |
+| 🌀 **Background & loader** | 🔁 rebuilt in — ask your assistant to update (or `node update-hermes.mjs`) |
 
 > 💡 **Forgetful?** On Windows you can register a one-time background reminder that
 > nudges you if an in-app update ever reverts the theme:
@@ -196,7 +199,7 @@ The status bar and background edit Hermes-Agent's source code and rebuild the ap
 they're a separate tier. The AI installer handles them for you; to do it by hand,
 see [`advanced/README.md`](advanced/README.md).
 
-> **Reminder:** a Hermes-Agent update reverts these two (they're built into the app, and updates rebuild it from a hard `git reset`). The seamless way to update is **`node update-hermes.mjs`** — it updates Hermes-Agent *and* re-applies the pack in one shot, so the app never comes back un-themed. (Prefer it over the in-app Update button.) If you did update in-app and came back stock, run `node update-hermes.mjs --no-update` to just re-apply. If anything fails, see [`ai/brokenupdatefix.md`](ai/brokenupdatefix.md).
+> **Reminder:** a Hermes-Agent update reverts these two (they're built into the app, and updates rebuild it from a hard `git reset`). The easy way to update: **ask your AI assistant to "update my Hermes and re-apply Classic Gold"** — it updates Hermes-Agent, re-applies the pack, and fixes anything that breaks, with no terminal on your end (see [`ai/update.md`](ai/update.md)). Prefer this over the in-app Update button. *(Comfortable in a terminal? `node update-hermes.mjs`, or `--no-update` to just re-apply after an in-app update.)* If anything fails, see [`ai/brokenupdatefix.md`](ai/brokenupdatefix.md).
 
 > **Heads-up (technical):** the advanced pieces need a Hermes-Agent desktop **dev
 > environment** (`apps/desktop` with dependencies installed), and Hermes-Agent must be

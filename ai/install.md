@@ -105,15 +105,22 @@ scripts **refuse to build while Hermes is running** and tell you so. Handle it:
   `cd "<repo>/apps/desktop" && npm run pack`.
 
 **After the advanced tier installs, TELL THE USER how to keep it** (a Hermes
-update rebuilds from source and wipes it — this is the #1 support issue):
+update rebuilds from source and wipes it — this is the #1 support issue). Frame
+it around **asking their assistant**, not typing commands — most users aren't
+technical:
 
-- From now on, **update Hermes with `node update-hermes.mjs`, NOT the in-app
-  Update button** — it updates Hermes *and* re-applies this pack in one step.
+- Tell them: *"When you want to update Hermes later, don't use the in-app Update
+  button — just ask me (or any AI assistant) to **'update my Hermes and re-apply
+  Classic Gold.'** I'll handle it and fix anything that breaks."* Point that
+  future prompt at [`ai/update.md`](update.md). (Under the hood it runs
+  `node update-hermes.mjs` + self-heals — but the user shouldn't need to know or
+  type that.)
 - **Offer to set up the auto-reminder** (Windows): with the user's OK, run
   `powershell -ExecutionPolicy Bypass -File advanced/watcher/register-watcher.ps1`
-  — a read-only Scheduled Task that notifies them if a future in-app update ever
-  reverts the theme. (Remove with `unregister-watcher.ps1`.)
-- If an update ever leaves it broken, point them to `ai/brokenupdatefix.md`.
+  — a read-only logon check that notifies them if a future in-app update ever
+  reverts the theme. (It falls back to a Startup-folder check if Task Scheduler
+  needs admin; remove with `unregister-watcher.ps1`.)
+- If an update ever leaves it broken, use `ai/brokenupdatefix.md` to fix it.
 
 **4. Theme — run the automated installer (do this LAST; it restarts Hermes):**
 

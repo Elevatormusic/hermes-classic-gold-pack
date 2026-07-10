@@ -349,18 +349,34 @@ function Sep() {
    tokens appear in the current turn. Anchoring at turn start folds prompt
    upload + prefill + time-to-first-token + tool-call gaps into the window,
    dragging the shown rate far below the model's true decode speed — on local
-   models a large prompt prefills for seconds before the first token (#60583). */
+   models a large prompt prefills for seconds before the first token (#60583).
+
+   Only trust the anchor once output has GROWN across at least two updates
+   (i.e. usage is genuinely streaming in). With `streaming: false`, the whole
+   turn's output lands in ONE final update — anchoring there would divide all
+   tokens by a near-zero window and read absurdly high (observed: 523/s for a
+   ~30 tok/s model). For single-burst turns return null so the caller falls
+   back to the turn-anchored average: diluted, but sane. */
 function useDecodeStartedAt(turnStartedAt: null | number | undefined, output: number | undefined): null | number {
-  const ref = useRef<{ at: null | number; turn: null | number | undefined }>({ at: null, turn: null })
+  const ref = useRef<{ at: null | number; growths: number; lastOutput: number; turn: null | number | undefined }>({
+    at: null,
+    growths: 0,
+    lastOutput: 0,
+    turn: null
+  })
 
   if (ref.current.turn !== turnStartedAt) {
-    ref.current = { at: null, turn: turnStartedAt }
+    ref.current = { at: null, growths: 0, lastOutput: 0, turn: turnStartedAt }
   }
-  if (ref.current.at === null && typeof output === 'number' && output > 0) {
-    ref.current.at = Date.now()
+  if (typeof output === 'number' && output > ref.current.lastOutput) {
+    ref.current.lastOutput = output
+    ref.current.growths += 1
+    if (ref.current.at === null) {
+      ref.current.at = Date.now()
+    }
   }
 
-  return ref.current.at
+  return ref.current.growths >= 2 ? ref.current.at : null
 }
 
 function useNow(enabled: boolean): number {

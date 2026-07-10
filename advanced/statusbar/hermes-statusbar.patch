@@ -293,7 +293,7 @@ index 753c389..055aa76 100644
        sessionStartedAt,
        showYoloToggle,
 diff --git a/apps/desktop/src/app/shell/statusbar-controls.tsx b/apps/desktop/src/app/shell/statusbar-controls.tsx
-index 9a9f098..a5c0e16 100644
+index 9a9f098..9c76905 100644
 --- a/apps/desktop/src/app/shell/statusbar-controls.tsx
 +++ b/apps/desktop/src/app/shell/statusbar-controls.tsx
 @@ -1,14 +1,113 @@
@@ -423,7 +423,7 @@ index 9a9f098..a5c0e16 100644
    menuContent?: ((close: () => void) => ReactNode) | ReactNode
    menuItems?: readonly StatusbarMenuItem[]
    onSelect?: (modifiers: StatusbarSelectModifiers) => void
-@@ -55,30 +153,602 @@ interface StatusbarControlsProps extends ComponentProps<'footer'> {
+@@ -55,30 +153,618 @@ interface StatusbarControlsProps extends ComponentProps<'footer'> {
    items?: readonly StatusbarItem[]
  }
  
@@ -624,18 +624,34 @@ index 9a9f098..a5c0e16 100644
 +   tokens appear in the current turn. Anchoring at turn start folds prompt
 +   upload + prefill + time-to-first-token + tool-call gaps into the window,
 +   dragging the shown rate far below the model's true decode speed — on local
-+   models a large prompt prefills for seconds before the first token (#60583). */
++   models a large prompt prefills for seconds before the first token (#60583).
++
++   Only trust the anchor once output has GROWN across at least two updates
++   (i.e. usage is genuinely streaming in). With `streaming: false`, the whole
++   turn's output lands in ONE final update — anchoring there would divide all
++   tokens by a near-zero window and read absurdly high (observed: 523/s for a
++   ~30 tok/s model). For single-burst turns return null so the caller falls
++   back to the turn-anchored average: diluted, but sane. */
 +function useDecodeStartedAt(turnStartedAt: null | number | undefined, output: number | undefined): null | number {
-+  const ref = useRef<{ at: null | number; turn: null | number | undefined }>({ at: null, turn: null })
++  const ref = useRef<{ at: null | number; growths: number; lastOutput: number; turn: null | number | undefined }>({
++    at: null,
++    growths: 0,
++    lastOutput: 0,
++    turn: null
++  })
 +
 +  if (ref.current.turn !== turnStartedAt) {
-+    ref.current = { at: null, turn: turnStartedAt }
++    ref.current = { at: null, growths: 0, lastOutput: 0, turn: turnStartedAt }
 +  }
-+  if (ref.current.at === null && typeof output === 'number' && output > 0) {
-+    ref.current.at = Date.now()
++  if (typeof output === 'number' && output > ref.current.lastOutput) {
++    ref.current.lastOutput = output
++    ref.current.growths += 1
++    if (ref.current.at === null) {
++      ref.current.at = Date.now()
++    }
 +  }
 +
-+  return ref.current.at
++  return ref.current.growths >= 2 ? ref.current.at : null
 +}
 +
 +function useNow(enabled: boolean): number {
@@ -1034,7 +1050,7 @@ index 9a9f098..a5c0e16 100644
          {items
            .filter(item => !item.hidden)
            .map(item => (
-@@ -101,11 +771,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
+@@ -101,11 +787,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
    )
  
    if (item.variant === 'menu' && (item.menuContent || (item.menuItems && item.menuItems.length > 0))) {
@@ -1046,7 +1062,7 @@ index 9a9f098..a5c0e16 100644
      const trigger = (
        <DropdownMenuTrigger asChild>
          <button className={cn(STATUSBAR_ACTION_CLASS, item.className)} disabled={item.disabled} type="button">
-@@ -179,7 +844,7 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
+@@ -179,7 +860,7 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
        <Tip label={item.title}>
          <div
            className={cn(
@@ -1055,7 +1071,7 @@ index 9a9f098..a5c0e16 100644
              item.className
            )}
          >
-@@ -218,3 +883,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
+@@ -218,3 +899,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
      </Tip>
    )
  }

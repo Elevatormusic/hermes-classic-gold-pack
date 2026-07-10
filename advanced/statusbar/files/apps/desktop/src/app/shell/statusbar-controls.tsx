@@ -345,6 +345,24 @@ function Sep() {
   return <span className="shrink-0 text-[#6b540f]">{SYMBOLS.sep}</span>
 }
 
+/* Decode-only anchor for the tok/s fallback: stamp the first moment output
+   tokens appear in the current turn. Anchoring at turn start folds prompt
+   upload + prefill + time-to-first-token + tool-call gaps into the window,
+   dragging the shown rate far below the model's true decode speed — on local
+   models a large prompt prefills for seconds before the first token (#60583). */
+function useDecodeStartedAt(turnStartedAt: null | number | undefined, output: number | undefined): null | number {
+  const ref = useRef<{ at: null | number; turn: null | number | undefined }>({ at: null, turn: null })
+
+  if (ref.current.turn !== turnStartedAt) {
+    ref.current = { at: null, turn: turnStartedAt }
+  }
+  if (ref.current.at === null && typeof output === 'number' && output > 0) {
+    ref.current.at = Date.now()
+  }
+
+  return ref.current.at
+}
+
 function useNow(enabled: boolean): number {
   const [now, setNow] = useState(() => Date.now())
 
@@ -506,7 +524,8 @@ function TelemetryTape() {
   const pct = Math.round(contextPercent(usage))
   const elapsedSince = busy && turnStartedAt ? turnStartedAt : sessionStartedAt
   const local = source.symbol === SYMBOLS.home
-  const speed = tokenSpeedLabel(usage.output, turnStartedAt, now, usage.tokens_per_second)
+  const decodeStartedAt = useDecodeStartedAt(turnStartedAt, usage.output)
+  const speed = tokenSpeedLabel(usage.output, decodeStartedAt ?? turnStartedAt, now, usage.tokens_per_second)
   // Progressive disclosure driven by the STABLE viewport width — never the
   // tape's own measured width, which would feed back on itself. The flex layout
   // below hugs its content and truncates model/source, so these thresholds only

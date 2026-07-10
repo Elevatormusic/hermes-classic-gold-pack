@@ -1,5 +1,5 @@
 diff --git a/apps/desktop/electron/main.cjs b/apps/desktop/electron/main.cjs
-index 69d5d5f..2ef5a27 100644
+index 69d5d5f..a9f5397 100644
 --- a/apps/desktop/electron/main.cjs
 +++ b/apps/desktop/electron/main.cjs
 @@ -212,6 +212,29 @@ if (IS_WSL && !REMOTE_DISPLAY_REASON && fs.existsSync('/dev/dxg')) {
@@ -32,6 +32,50 @@ index 69d5d5f..2ef5a27 100644
  // Keep the renderer running at full speed while the window is in the background
  // or occluded. The chat transcript streams to screen through a
  // requestAnimationFrame-gated flush; Chromium pauses rAF (and clamps timers)
+@@ -4169,6 +4192,25 @@ function installPreviewShortcut(window) {
+ // read it back on did-finish-load to re-apply after reloads or crash recovery.
+ const { ZOOM_STORAGE_KEY, clampZoomLevel, percentToZoomLevel, zoomLevelToPercent } = require('./zoom.cjs')
+ 
++const UNSAFE_JS_CHAR_MAP = {
++  '<': '\\u003C',
++  '>': '\\u003E',
++  '/': '\\u002F',
++  '\\': '\\\\',
++  '\b': '\\b',
++  '\f': '\\f',
++  '\n': '\\n',
++  '\r': '\\r',
++  '\t': '\\t',
++  '\0': '\\0',
++  '\u2028': '\\u2028',
++  '\u2029': '\\u2029'
++}
++
++function escapeUnsafeJsChars(str) {
++  return String(str).replace(/[<>\/\\\b\f\n\r\t\0\u2028\u2029]/g, ch => UNSAFE_JS_CHAR_MAP[ch] || ch)
++}
++
+ function setAndPersistZoomLevel(window, zoomLevel) {
+   if (!window || window.isDestroyed()) return
+   const next = clampZoomLevel(zoomLevel)
+@@ -4178,7 +4220,7 @@ function setAndPersistZoomLevel(window, zoomLevel) {
+   window.webContents.send('hermes:zoom:changed', { level: next, percent: zoomLevelToPercent(next) })
+   window.webContents
+     .executeJavaScript(
+-      `try { localStorage.setItem(${JSON.stringify(ZOOM_STORAGE_KEY)}, ${JSON.stringify(String(next))}) } catch {}`
++      `try { localStorage.setItem(${escapeUnsafeJsChars(JSON.stringify(ZOOM_STORAGE_KEY))}, ${escapeUnsafeJsChars(JSON.stringify(String(next)))}) } catch {}`
+     )
+     .catch(error => rememberLog(`[zoom] persist failed: ${error?.message || error}`))
+ }
+@@ -4187,7 +4229,7 @@ function restorePersistedZoomLevel(window) {
+   if (!window || window.isDestroyed()) return
+   window.webContents
+     .executeJavaScript(
+-      `(() => { try { return localStorage.getItem(${JSON.stringify(ZOOM_STORAGE_KEY)}) } catch { return null } })()`
++      `(() => { try { return localStorage.getItem(${escapeUnsafeJsChars(JSON.stringify(ZOOM_STORAGE_KEY))}) } catch { return null } })()`
+     )
+     .then(stored => {
+       if (stored == null || !window || window.isDestroyed()) return
 diff --git a/apps/desktop/electron/preload.cjs b/apps/desktop/electron/preload.cjs
 index 0a9c4fd..c84f46f 100644
 --- a/apps/desktop/electron/preload.cjs
@@ -249,7 +293,7 @@ index 753c389..055aa76 100644
        sessionStartedAt,
        showYoloToggle,
 diff --git a/apps/desktop/src/app/shell/statusbar-controls.tsx b/apps/desktop/src/app/shell/statusbar-controls.tsx
-index 9a9f098..9259694 100644
+index 9a9f098..a5c0e16 100644
 --- a/apps/desktop/src/app/shell/statusbar-controls.tsx
 +++ b/apps/desktop/src/app/shell/statusbar-controls.tsx
 @@ -1,14 +1,113 @@
@@ -379,7 +423,7 @@ index 9a9f098..9259694 100644
    menuContent?: ((close: () => void) => ReactNode) | ReactNode
    menuItems?: readonly StatusbarMenuItem[]
    onSelect?: (modifiers: StatusbarSelectModifiers) => void
-@@ -55,30 +153,583 @@ interface StatusbarControlsProps extends ComponentProps<'footer'> {
+@@ -55,30 +153,602 @@ interface StatusbarControlsProps extends ComponentProps<'footer'> {
    items?: readonly StatusbarItem[]
  }
  
@@ -576,6 +620,24 @@ index 9a9f098..9259694 100644
 +  return <span className="shrink-0 text-[#6b540f]">{SYMBOLS.sep}</span>
 +}
 +
++/* Decode-only anchor for the tok/s fallback: stamp the first moment output
++   tokens appear in the current turn. Anchoring at turn start folds prompt
++   upload + prefill + time-to-first-token + tool-call gaps into the window,
++   dragging the shown rate far below the model's true decode speed — on local
++   models a large prompt prefills for seconds before the first token (#60583). */
++function useDecodeStartedAt(turnStartedAt: null | number | undefined, output: number | undefined): null | number {
++  const ref = useRef<{ at: null | number; turn: null | number | undefined }>({ at: null, turn: null })
++
++  if (ref.current.turn !== turnStartedAt) {
++    ref.current = { at: null, turn: turnStartedAt }
++  }
++  if (ref.current.at === null && typeof output === 'number' && output > 0) {
++    ref.current.at = Date.now()
++  }
++
++  return ref.current.at
++}
++
 +function useNow(enabled: boolean): number {
 +  const [now, setNow] = useState(() => Date.now())
 +
@@ -737,7 +799,8 @@ index 9a9f098..9259694 100644
 +  const pct = Math.round(contextPercent(usage))
 +  const elapsedSince = busy && turnStartedAt ? turnStartedAt : sessionStartedAt
 +  const local = source.symbol === SYMBOLS.home
-+  const speed = tokenSpeedLabel(usage.output, turnStartedAt, now, usage.tokens_per_second)
++  const decodeStartedAt = useDecodeStartedAt(turnStartedAt, usage.output)
++  const speed = tokenSpeedLabel(usage.output, decodeStartedAt ?? turnStartedAt, now, usage.tokens_per_second)
 +  // Progressive disclosure driven by the STABLE viewport width — never the
 +  // tape's own measured width, which would feed back on itself. The flex layout
 +  // below hugs its content and truncates model/source, so these thresholds only
@@ -971,7 +1034,7 @@ index 9a9f098..9259694 100644
          {items
            .filter(item => !item.hidden)
            .map(item => (
-@@ -101,11 +752,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
+@@ -101,11 +771,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
    )
  
    if (item.variant === 'menu' && (item.menuContent || (item.menuItems && item.menuItems.length > 0))) {
@@ -983,7 +1046,7 @@ index 9a9f098..9259694 100644
      const trigger = (
        <DropdownMenuTrigger asChild>
          <button className={cn(STATUSBAR_ACTION_CLASS, item.className)} disabled={item.disabled} type="button">
-@@ -179,7 +825,7 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
+@@ -179,7 +844,7 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
        <Tip label={item.title}>
          <div
            className={cn(
@@ -992,7 +1055,7 @@ index 9a9f098..9259694 100644
              item.className
            )}
          >
-@@ -218,3 +864,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
+@@ -218,3 +883,6 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate:
      </Tip>
    )
  }
@@ -1093,10 +1156,46 @@ index e5477bb..b2f6ad4 100644
    max-width: min(var(--composer-width), 82vw);
  }
 diff --git a/apps/desktop/src/types/hermes.ts b/apps/desktop/src/types/hermes.ts
-index 9133fb4..5ff3be3 100644
+index 9133fb4..33ae24b 100644
 --- a/apps/desktop/src/types/hermes.ts
 +++ b/apps/desktop/src/types/hermes.ts
-@@ -422,6 +422,13 @@ export interface UsageStats {
+@@ -244,9 +244,35 @@ export interface ModelPricing {
+   free: boolean
+ }
+ 
++export interface LmStudioModelMetadata {
++  context_length?: null | number
++  display_name?: string
++  format?: null | string
++  loaded: boolean
++  loaded_instances: string[]
++  max_context_length?: null | number
++  params?: null | string
++  quantization?: null | string
++  size_bytes?: null | number
++}
++
++export interface LmStudioProviderMetadata {
++  available: boolean
++  base_url: string
++  downloaded_models?: number
++  error?: string
++  loaded_models?: number
++}
++
+ export interface ModelOptionProvider {
+   is_current?: boolean
+   models?: string[]
++  model_metadata?: Record<string, LmStudioModelMetadata>
++  lmstudio?: LmStudioProviderMetadata
++  /** OpenAI-compatible endpoint URL for custom/user-defined provider rows. */
++  api_url?: string
++  /** Alternate endpoint URL field used by some provider payloads. */
++  base_url?: string
+   name: string
+   slug: string
+   total_models?: number
+@@ -422,6 +448,13 @@ export interface UsageStats {
    input: number
    output: number
    total: number

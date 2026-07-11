@@ -21,13 +21,13 @@ overriding value is **do no harm to the user's existing setup**.
 ## Conventions
 
 - **ESM only** (`.mjs`, `import`/`export`). No CommonJS in pack code (the `advanced/statusbar/files/**` Electron `.cjs` files are payloads copied into Hermes, not pack logic).
-- **Dependency injection for testability.** Core functions in `lib/` accept injectable `env`, `platform`, `exists`, and `nowIso` params defaulting to the real ones (see `lib/preflight.mjs`, `lib/hermes-home.mjs`, `lib/pack-stamp.mjs`). New logic should follow this so tests need no real filesystem or clock.
+- **Dependency injection for testability — reads and time only.** Core functions in `lib/` accept injectable `env`, `platform`, `exists` (reads) and `nowIso` (clock), defaulting to the real ones (see `lib/preflight.mjs`, `lib/hermes-home.mjs`, `lib/pack-stamp.mjs`). New logic should follow this. **The final filesystem *write* is NOT injected:** the record layer calls `writeFileSync`/`cpSync` directly and its tests write to a real temp `HERMES_HOME` (`mkdtempSync`). A direct `writeFileSync` in a write path is the established, correct pattern — do not ask for an injected writer.
 - **JSDoc typedefs** on exported functions (params and return shape), matching the existing modules.
 - **Corrupt state files are treated as absent**, never fatal — JSON reads are wrapped and fall back (see `readJson` in `lib/pack-stamp.mjs`).
 
 ## Invariants — do not break these
 
-1. **Every apply path writes the stamp and manifest.** `lib/pack-stamp.mjs` is the single source of truth for "what's installed" (`hermes-classic-gold-pack.json`) and "how to undo it" (`.manifest.json`). Patch, copy, reconcile, and `--no-build` staging must all stamp, or update/uninstall/watch go blind.
+1. **Every write into `HERMES_HOME` is recorded in the stamp and manifest.** `lib/pack-stamp.mjs` is the single source of truth for "what's installed" (`hermes-classic-gold-pack.json`) and "how to undo it" (`.manifest.json`). **Concretely: any `writeFileSync`/`cpSync`/`mkdirSync`/`rmSync` whose destination is under `HERMES_HOME` or the `hermes-agent` checkout MUST be paired with `recordApplied()` (stamp) and `appendManifest()` (undo receipt).** A new file or file-type written into `HERMES_HOME` with no matching manifest entry is an **orphan the uninstaller can never remove** — that is data loss, not a nit. Patch, copy, reconcile, and `--no-build` staging all count.
 2. **Never silently target an ambiguous install for a write.** An explicit `--home`/`--repo` is authoritative — use it or fail; never fall back to auto-detection (a typo must not hit the user's real install). When auto-resolution is ambiguous (`findHermesHomes` returns more than one), index 0 is a *guess* — confirm before writing.
 3. **Uninstall must reverse via the manifest**, not by guessing — the manifest's undo receipts are the contract.
 4. **Idempotency.** Re-running an apply must not double-patch or corrupt a partially-applied tier; tier sentinels (`TIER_SENTINELS`) detect an already-applied or reverted state.
@@ -37,11 +37,11 @@ overriding value is **do no harm to the user's existing setup**.
 
 When reviewing a PR in this repo, flag (roughly in priority order):
 
-- **P0 — data loss risk:** any apply/patch/copy path that can write into `HERMES_HOME` or the `hermes-agent` checkout **without** recording a stamp + manifest entry, or any uninstall/revert that deletes user files not tracked by the manifest.
+- **P0 — unrecorded write (check this FIRST, before any style/testability comment):** scan the diff for every `writeFileSync`/`cpSync`/`mkdirSync`/`rmSync` (and any new file path) whose destination is under `HERMES_HOME` or the `hermes-agent` checkout. Each one MUST be paired with a `recordApplied()` **and** `appendManifest()` call. A write with no manifest entry is an orphan the uninstaller can never remove — flag it as data loss even if the code "works" and the tests pass. Also flag any uninstall/revert that deletes user files not tracked by the manifest.
 - **P0 — wrong-target writes:** auto-resolving an ambiguous `HERMES_HOME`/repo and writing to it without confirmation; treating an explicit `--home`/`--repo` as a hint instead of authoritative.
 - **P0 — secrets:** any hardcoded token, key, or path containing a real username committed to the tree (gitleaks will also catch this; call it out anyway).
 - **P1 — non-idempotent apply:** a change that double-patches on re-run, or that doesn't update `TIER_SENTINELS` when it adds/renames a tier marker.
-- **P1 — untestable logic:** new `lib/` code that reaches for the real `fs`/`env`/`Date`/`process.platform` directly instead of injectable params, so it can't be unit-tested the way the rest of the module is.
+- **P1 — untestable logic:** new `lib/` code that reads real `env`/`Date`/`process.platform`/`exists` directly instead of the injectable params. Do **not** flag a direct `writeFileSync`/`cpSync` in a write path — that matches `lib/pack-stamp.mjs` and is tested against a real temp `HERMES_HOME`; only reads and time need injection.
 - **P1 — cross-platform breakage:** hardcoded `\\` or `/`, `win32`-only assumptions in shared code, or string path comparisons that fail across separators.
 - **P1 — missing test:** a bug fix without a `test/*.test.mjs` case reproducing it, or a new `lib/` export with no coverage.
 - **P2 — style:** CommonJS creeping into pack logic, missing JSDoc on new exports, or JSON reads that don't fall back on corruption.

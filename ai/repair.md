@@ -1,10 +1,11 @@
 # Patch-repair prompt
 
 Use this when an advanced patch (`status bar` or `caduceus extras`) does **not**
-apply cleanly because your Hermes version differs from the pack's base commit
-(the `BASE` constant in `advanced/apply-common.mjs` — currently
-`4d7f8ade3e586d83003d61be76e909f364040fba`). Paste the block below into your
-coding assistant. It also works in plain chat if you paste your current files.
+apply cleanly because your Hermes version differs from every stored baseline's
+commit (run `node scripts/diagnostics.mjs status` — it prints your detected app
+version, electron layer, and the selected baseline, or "NONE match"). Paste the
+block below into your coding assistant. It also works in plain chat if you paste
+your current files.
 
 > For a broad post-update recovery playbook (blank screen, `tsc` errors, orphan
 > files, missing composer/tape/background), see **[`brokenupdatefix.md`](brokenupdatefix.md)**
@@ -16,10 +17,13 @@ coding assistant. It also works in plain chat if you paste your current files.
 Goal: apply this pack's <status bar | caduceus extras> change to my Hermes
 version, which the shipped patch does not apply to cleanly.
 
-READ THESE INPUTS from the pack:
-  - advanced/<tier>/hermes-<tier>.patch      → the exact intended diff
-  - advanced/<tier>/files/apps/desktop/src/… → the full intended post-edit files
-  - base commit: the BASE constant in advanced/apply-common.mjs
+FIRST identify your era: check apps/desktop/electron/main.{ts,cjs} — `.ts` is the
+newer layer, `.cjs` the older. Then pick the CLOSEST baseline from
+advanced/baselines.json (prefer one whose electronExt matches, newest appVersion
+≤ yours) and read ITS inputs — do NOT use a hardcoded baseline:
+  - advanced/<tier>/baselines/<id>/hermes-<tier>.patch      → the exact intended diff
+  - advanced/<tier>/baselines/<id>/files/apps/desktop/…     → the full intended post-edit files
+  - that baseline's commit: the `commit` field for <id> in advanced/baselines.json
   (<tier> is "statusbar" (files: hermes-statusbar.patch) or "extras-caduceus"
    (files: hermes-caduceus.patch).)
 
@@ -64,6 +68,16 @@ VERIFY AND SELF-HEAL (do this yourself before asking me anything):
   - Only if it's a purely VISUAL problem with clean logs, ask me — in ONE
     message — for a screenshot of the affected area AND the DevTools console
     (Ctrl/Cmd+Shift+I → Console). Then finish the fix.
+
+CAPTURE THE RECONCILE AS A NEW BASELINE (so the next user on this version gets a
+clean install): once the build is green, snapshot the reconciled tree into a new
+baseline in the pack repo:
+  - advanced/<tier>/baselines/<appVersion>-<shortsha>/files/…  (full post-edit files)
+  - advanced/<tier>/baselines/<appVersion>-<shortsha>/hermes-<tier>.patch
+    = `git -C <hermes-agent> diff -- <the tier's files>` (LF-normalized)
+  - for statusbar, also additive/{global.d.ts,types-hermes.ts}.patch
+  - add a row to advanced/baselines.json: { id, commit (your HEAD), appVersion,
+    electronExt } and open a PR.
 
 PLAIN-CHAT FALLBACK: if you can't read my files directly, ask me to paste each
 current target file; return the merged version for me to save.

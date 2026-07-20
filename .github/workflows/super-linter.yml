@@ -35,3 +35,8 @@ jobs:
           # Kept on: gitleaks (secrets), eslint (JS), YAML/actionlint, bash, JSON.
           VALIDATE_NATURAL_LANGUAGE: false
           VALIDATE_JSCPD: false
+          # The advanced/**/baselines/**/files/** trees are VERBATIM Hermes-Agent
+          # source snapshots (the patch fallback), not this repo's code. They use
+          # Tailwind v4 CSS syntax stylelint can't parse and must never be modified
+          # to satisfy our linters — exclude them from linting entirely.
+          FILTER_REGEX_EXCLUDE: ".*/baselines/.*/files/.*"

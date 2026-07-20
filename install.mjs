@@ -11,12 +11,12 @@ import { createInterface } from 'node:readline'
 import { resolveHermesHome, findHermesHomes } from './lib/hermes-home.mjs'
 import { preflight, reportPreflight } from './lib/preflight.mjs'
 import { recordApplied, appendManifest, classifyState, formatReceipt } from './lib/pack-stamp.mjs'
+import { selectBaseline } from './lib/baseline.mjs'
 import { resolveAgentRepo } from './lib/agent-repo.mjs'
 import { installPets } from './lib/pets.mjs'
 import { activatePetInConfig } from './lib/config-edit.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
 const TIER_SCRIPTS = {
   statusbar: join(HERE, 'advanced', 'statusbar', 'apply-statusbar.mjs'),
   caduceus: join(HERE, 'advanced', 'extras-caduceus', 'apply-caduceus.mjs'),
@@ -172,7 +172,9 @@ async function main(argv) {
   if (args.advanced.length) {
     console.log(`• hermes-agent: ${repo}`)
     if (existsSync(join(repo, 'apps', 'desktop'))) {
-      const st = classifyState({ repo, home, base: BASE, agentHead: currentHead(repo) })
+      const sel = selectBaseline({ repo })
+      console.log(`• baseline: ${sel.baseline ? `${sel.baseline.id} (via ${sel.matchType})` : 'none — reconcile (ai/repair.md)'}`)
+      const st = classifyState({ repo, home, base: sel.baseline?.commit ?? null, agentHead: currentHead(repo) })
       console.log(`• current: ${Object.entries(st.tiers).map(([k, v]) => `${k}=${v}`).join(', ')}${st.onBase ? '' : '  (diverged from base)'}`)
     }
   }

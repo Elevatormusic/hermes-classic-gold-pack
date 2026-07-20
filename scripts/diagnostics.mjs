@@ -7,9 +7,9 @@ import { pathToFileURL } from 'node:url'
 import { resolveHermesHome } from '../lib/hermes-home.mjs'
 import { classifyState } from '../lib/pack-stamp.mjs'
 import { resolveAgentRepo } from '../lib/agent-repo.mjs'
+import { selectBaseline } from '../lib/baseline.mjs'
 
 const REPO = 'Elevatormusic/hermes-classic-gold-pack'
-const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
 
 /** Gather environment facts relevant to an install failure. */
 export function collect({ env = process.env, platform = process.platform } = {}) {
@@ -17,6 +17,10 @@ export function collect({ env = process.env, platform = process.platform } = {})
   let agentHead = null
   let packStamp = null
   let packApplied = null
+  let baseline = null
+  let matchType = 'none'
+  let appVersion = null
+  let electronExt = null
   if (hermesHome) {
     const repo = resolveAgentRepo({ home: hermesHome })
     try {
@@ -27,6 +31,11 @@ export function collect({ env = process.env, platform = process.platform } = {})
     } catch {
       // no git / not a checkout — leave null
     }
+    const sel = selectBaseline({ repo })
+    baseline = sel.baseline
+    matchType = sel.matchType
+    appVersion = sel.appVersion
+    electronExt = sel.electronExt
     const stamp = join(hermesHome, 'desktop-build-stamp.json')
     if (existsSync(stamp)) {
       try {
@@ -52,7 +61,12 @@ export function collect({ env = process.env, platform = process.platform } = {})
     node: process.version,
     hermesHome,
     agentHead,
-    onBase: agentHead === BASE,
+    onBase: Boolean(baseline && agentHead === baseline.commit),
+    baselineId: baseline?.id ?? null,
+    baselineCommit: baseline?.commit ?? null,
+    matchType,
+    appVersion,
+    electronExt,
     packStamp,
     packApplied,
   }
@@ -101,7 +115,8 @@ export function formatDiagnostics(info) {
     `- Node: ${info.node}`,
     `- HERMES_HOME: ${info.hermesHome ?? '(not found)'}`,
     `- hermes-agent HEAD: ${info.agentHead ?? '(unknown)'}`,
-    `- on base ${BASE.slice(0, 7)}: ${info.onBase ? 'yes' : 'no'}`,
+    `- installed: app ${info.appVersion ?? '?'} · electron ${info.electronExt ?? '?'}`,
+    `- baseline: ${info.baselineId ? `${info.baselineId} (via ${info.matchType})` : 'NONE match → reconcile (ai/repair.md)'}`,
     info.packApplied ? `- pack applied: ${info.packApplied}` : '- pack applied: (core only — no advanced tier stamp)',
     info.packStamp ? `- hermes build stamp: ${info.packStamp}` : null,
   ]
@@ -120,7 +135,7 @@ const STATE_ACTION = {
  * Render a per-component install status using the pack stamp + live source
  * sentinels (classifyState). Tells the user what's applied and the next action.
  */
-export function formatStatus(info, { base = BASE } = {}) {
+export function formatStatus(info, { base = info.baselineCommit } = {}) {
   const home = info.hermesHome
   if (!home) return '### Classic Gold status\n- HERMES_HOME: (not found — pass --home or install Hermes)'
   const repo = resolveAgentRepo({ home })
@@ -129,7 +144,10 @@ export function formatStatus(info, { base = BASE } = {}) {
   const lines = [
     '### Classic Gold status',
     `- HERMES_HOME: ${home}`,
-    `- on base ${base.slice(0, 7)}: ${state.onBase ? 'yes' : `no (HEAD ${info.agentHead ? info.agentHead.slice(0, 7) : '?'})`}`,
+    `- installed: HEAD ${info.agentHead ? info.agentHead.slice(0, 7) : '?'} · app ${info.appVersion ?? '?'} · electron ${info.electronExt ?? '?'}`,
+    info.baselineId
+      ? `- baseline: ${info.baselineId} (matched via ${info.matchType})`
+      : '- baseline: NONE match → reconcile per ai/repair.md',
   ]
   for (const [tier, st] of Object.entries(state.tiers)) {
     const via = stamp?.applied?.[tier]?.via

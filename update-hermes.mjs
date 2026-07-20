@@ -22,10 +22,10 @@ import { fileURLToPath } from 'node:url'
 import { resolveHermesHome } from './lib/hermes-home.mjs'
 import { resolveAgentRepo } from './lib/agent-repo.mjs'
 import { classifyState } from './lib/pack-stamp.mjs'
+import { selectBaseline } from './lib/baseline.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const isWin = process.platform === 'win32'
-const BASE = '4d7f8ade3e586d83003d61be76e909f364040fba'
 
 function gitHead(repo) {
   try {
@@ -68,7 +68,7 @@ function detectTiers(repo, home) {
     // Prefer the LIVE source (via classifyState sentinels) — this catches
     // hand-reconciled installs that never wrote a stamp, so caduceus isn't
     // silently dropped (issue #3). MUST run BEFORE `hermes update` wipes source.
-    const st = classifyState({ repo, home, base: BASE, agentHead: gitHead(repo) })
+    const st = classifyState({ repo, home, base: selectBaseline({ repo }).baseline?.commit ?? null, agentHead: gitHead(repo) })
     for (const [tier, state] of Object.entries(st.tiers)) {
       if (state === 'applied' || state === 'diverged') set.add(tier) // edits present now
     }
@@ -137,8 +137,12 @@ function main() {
   //    checkout the apply scripts reconcile-or-REFUSE (never blind-copy), so a
   //    refusal here is safe — it means "reconcile via ai/repair.md", not a regress.
   const newHead = gitHead(repo)
-  if (newHead && newHead !== BASE) {
-    console.warn(`! Updated Hermes (${newHead.slice(0, 7)}) differs from the pack base (${BASE.slice(0, 7)}) —`)
+  const sel = selectBaseline({ repo })
+  if (!sel.baseline) {
+    console.warn(`! Updated Hermes (${newHead ? newHead.slice(0, 7) : '?'}) matches no pack baseline —`)
+    console.warn("  a tier that can't be reconciled cleanly will refuse rather than regress your install.")
+  } else if (newHead && newHead !== sel.baseline.commit) {
+    console.warn(`! Updated Hermes (${newHead.slice(0, 7)}) differs from baseline ${sel.baseline.id} (${sel.baseline.commit.slice(0, 7)}) —`)
     console.warn("  a tier that can't be reconciled cleanly will refuse rather than regress your install.")
   }
   console.log(`• Re-applying tiers: ${tiers.join(', ')}`)

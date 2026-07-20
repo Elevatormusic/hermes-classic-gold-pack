@@ -1,0 +1,14 @@
+[
+  {
+    "id": "0.17.0-4d7f8ad",
+    "commit": "4d7f8ade3e586d83003d61be76e909f364040fba",
+    "appVersion": "0.17.0",
+    "electronExt": "cjs"
+  },
+  {
+    "id": "0.17.0-d7b3607",
+    "commit": "d7b36070ef807841699ad32c5b6af547fee3ff64",
+    "appVersion": "0.17.0",
+    "electronExt": "ts"
+  }
+]

@@ -42,8 +42,12 @@ surprises you had to figure out):
   the pet config block for you — that's expected, not an error.
 - The theme has **no file/CLI** — a one-time restart (or a manual console paste) is
   the only way; that's why it's a helper, not a plain file copy.
-- The advanced patches target one Hermes-Agent version; on a different one the scripts
-  fall back cleanly and the AI reconciles the rest. Expected, handled.
+- The installer auto-detects your Hermes version (git HEAD + `apps/desktop/package.json`
+  version + whether the electron layer is `.ts` or `.cjs`) and picks the matching
+  baseline from `advanced/baselines.json`. `node scripts/diagnostics.mjs status` shows
+  which baseline matched. If none matches, the apply scripts stop and point at
+  `ai/repair.md` (the AI reconciles, then commits the result as a new baseline).
+  Expected, handled.
 
 ## Steps
 

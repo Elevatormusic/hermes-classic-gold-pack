@@ -13,16 +13,37 @@
 >   Classic Gold" ([`ai/update.md`](../ai/update.md)) — it re-applies + self-heals,
 >   no terminal needed. (Terminal equivalent: `node update-hermes.mjs`.) If a
 >   re-apply ever fails, see [`ai/brokenupdatefix.md`](../ai/brokenupdatefix.md).
-> - Patches are generated against the `BASE` commit in
->   [`apply-common.mjs`](apply-common.mjs) (currently `4d7f8ade`). On a different
->   version they may not apply cleanly (see *If a patch rejects*).
+> - The pack ships **multiple version baselines** (see *Versioned baselines*
+>   below). The installer auto-selects the one matching your Hermes; if none
+>   matches, the scripts stop and point you at *If a patch rejects*.
+
+## Versioned baselines
+
+Hermes-Agent moves fast, so each tier stores its `patch` + full-file `files/`
+fallback (+ statusbar's additive `.d.ts` patches) **per baseline**:
+
+```
+advanced/
+  baselines.json                          # index (oldest → newest)
+  statusbar/baselines/<id>/{hermes-statusbar.patch, files/…, additive/…}
+  extras-caduceus/baselines/<id>/{hermes-caduceus.patch, files/…}
+```
+
+`baselines.json` rows: `{ id: "<appVersion>-<shortsha>", commit, appVersion,
+electronExt: "ts"|"cjs" }`. The resolver ([`../lib/baseline.mjs`](../lib/baseline.mjs))
+picks a baseline in order: **exact git HEAD commit → electron-layer probe
+(`electron/main.ts` vs `main.cjs`) + newest `appVersion ≤` yours → none**. Two
+builds can share an `appVersion` (e.g. `0.17.0`) but differ in source shape, so
+the commit and the `.ts`/`.cjs` probe are decisive, not semver alone. When
+nothing matches, reconcile a new baseline via [`../ai/repair.md`](../ai/repair.md).
 
 ## Status bar (TelemetryTape HUD)
 
 Adds the custom status bar (system RAM/VRAM, context usage, session/turn timers,
-caduceus rail glyphs). Touches 14 files: 12 under `apps/desktop/src/` plus an
-Electron IPC pair (`electron/main.cjs` + `electron/preload.cjs`) that reports RAM
-(via `os`) and VRAM (via `nvidia-smi`). It also lifts the chat composer to sit
+caduceus rail glyphs). Touches ~13–14 files: renderer files under
+`apps/desktop/src/` plus an Electron IPC pair (`electron/main.{ts,cjs}` +
+`electron/preload.{ts,cjs}`, per the baseline's era) that reports RAM (via `os`)
+and VRAM (via `nvidia-smi`). It also lifts the chat composer to sit
 above the status bar and reserves that space in the thread's scroll clamp (via a
 single `--composer-dock-offset` variable) so the last message never slides under
 the prompt box, hides the composer's redundant model pill (the tape has its own
@@ -54,7 +75,9 @@ node advanced/extras-caduceus/apply-caduceus.mjs --repo "<path-to>/hermes-agent"
 
 ## How the apply scripts work
 
-1. Warn if your `hermes-agent` HEAD isn't the `BASE` commit in `apply-common.mjs`.
+1. **Select the matching baseline** (commit → electron probe → semver, via
+   `lib/baseline.mjs`) and warn if your HEAD isn't that baseline's commit. If no
+   baseline matches, stop and point at `ai/repair.md` (nothing is touched).
 2. **Refuse to build while Hermes is running** — on Windows this is detected
    automatically (a running `Hermes.exe` locks `release/win-unpacked` and would
    fail the build); on other OSes you get a reminder to quit it. Pass `--no-build`
@@ -64,12 +87,13 @@ node advanced/extras-caduceus/apply-caduceus.mjs --repo "<path-to>/hermes-agent"
    install's modified/staged files don't force `git apply --3way` into
    "does not match index" and the risky full-file fallback.
 5. `git apply --3way` the shipped patch. **If it rejects**, fall back per file:
-   - **On the base commit:** copy the full post-edit file from `<tier>/files/` —
+   - **On the baseline's commit:** copy the full post-edit file from the
+     baseline's `files/` —
      **except** the type-declaration files (`global.d.ts`, `types/hermes.ts`),
      which are 3-way-merged from a tiny additive patch in `<tier>/additive/`. A
      full copy of those could drop a newer bridge API (e.g. `window.hermes.zoom`)
      and break `tsc`.
-   - **On a DIVERGED checkout (HEAD ≠ BASE):** it **refuses to blind-copy** and
+   - **On a DIVERGED checkout (HEAD ≠ the baseline's commit):** it **refuses to blind-copy** and
      **stops before building** — a base-file copy would silently overwrite your
      version's real code (and any `repair.md` reconciliation). It lists the
      unresolved files and points you to `repair.md`. Pass `--force-copy` to

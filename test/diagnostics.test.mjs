@@ -12,14 +12,20 @@ const INFO = {
   hermesHome: 'C:/x/hermes',
   agentHead: '4d7f8ade',
   onBase: true,
+  baselineId: '0.17.0-4d7f8ad',
+  baselineCommit: '4d7f8ade3e586d83003d61be76e909f364040fba',
+  matchType: 'commit',
+  appVersion: '0.17.0',
+  electronExt: 'cjs',
   packStamp: null,
 }
 
-test('formatDiagnostics includes key fields and on-base verdict', () => {
+test('formatDiagnostics includes key fields and selected baseline', () => {
   const s = formatDiagnostics(INFO)
   assert.match(s, /win32/)
   assert.match(s, /v24\.0\.0/)
-  assert.match(s, /on base 4d7f8ad: yes/i)
+  assert.match(s, /app 0\.17\.0 · electron cjs/)
+  assert.match(s, /baseline: 0\.17\.0-4d7f8ad \(via commit\)/)
 })
 
 test('buildIssueUrl encodes title+body and targets the repo with the label', () => {

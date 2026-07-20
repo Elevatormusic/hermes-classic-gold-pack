@@ -1,0 +1,226 @@
+diff --git a/apps/desktop/src/components/Backdrop.tsx b/apps/desktop/src/components/Backdrop.tsx
+index 31525b31b..8e54b7533 100644
+--- a/apps/desktop/src/components/Backdrop.tsx
++++ b/apps/desktop/src/components/Backdrop.tsx
+@@ -24,7 +24,32 @@ const BLEND_MODES = [
+ ] as const
+ 
+ type BlendMode = (typeof BLEND_MODES)[number]
+-const assetPath = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
++type CaduceusTone = 'amber' | 'bronze' | 'darkGold' | 'gold'
++
++const CADUCEUS_COLORS: Record<CaduceusTone, string> = {
++  amber: 'rgba(255, 191, 0, 0.26)',
++  bronze: 'rgba(205, 127, 50, 0.28)',
++  darkGold: 'rgba(184, 134, 11, 0.24)',
++  gold: 'rgba(255, 215, 0, 0.3)'
++}
++
++const HERMES_CADUCEUS: readonly { text: string; tone: CaduceusTone }[] = [
++  { tone: 'bronze', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⡀⠀⣀⣀⠀⢀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'bronze', text: '⠀⠀⠀⠀⠀⠀⢀⣠⣴⣾⣿⣿⣇⠸⣿⣿⠇⣸⣿⣿⣷⣦⣄⡀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'amber', text: '⠀⢀⣠⣴⣶⠿⠋⣩⡿⣿⡿⠻⣿⡇⢠⡄⢸⣿⠟⢿⣿⢿⣍⠙⠿⣶⣦⣄⡀⠀' },
++  { tone: 'amber', text: '⠀⠀⠉⠉⠁⠶⠟⠋⠀⠉⠀⢀⣈⣁⡈⢁⣈⣁⡀⠀⠉⠀⠙⠻⠶⠈⠉⠉⠀⠀' },
++  { tone: 'gold', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣿⡿⠛⢁⡈⠛⢿⣿⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'gold', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠿⣿⣦⣤⣈⠁⢠⣴⣿⠿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'amber', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠻⢿⣿⣦⡉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'amber', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⢷⣦⣈⠛⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'bronze', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣴⠦⠈⠙⠿⣦⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'bronze', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣿⣤⡈⠁⢤⣿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'darkGold', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠛⠷⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'darkGold', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⠑⢶⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'darkGold', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠁⢰⡆⠈⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'darkGold', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠳⠈⣡⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' },
++  { tone: 'darkGold', text: '⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀' }
++]
+ 
+ export function Backdrop() {
+   const [controlsOpen, setControlsOpen] = useState(false)
+@@ -68,21 +93,15 @@ export function Backdrop() {
+     document.documentElement.style.setProperty('--radius-scalar', String(shape.radiusScalar))
+   }, [shape.radiusScalar])
+ 
+-  const statue = useControls(
+-    'Backdrop / Statue',
++  const caduceus = useControls(
++    'Backdrop / Caduceus',
+     {
+       enabled: { value: true, label: 'on' },
+-      opacity: { value: 0.025, min: 0, max: 1, step: 0.005 },
+-      blendMode: { value: 'difference' as BlendMode, options: BLEND_MODES, label: 'blend' },
+-      invert: { value: true, label: 'invert color' },
+-      saturate: { value: 1, min: 0, max: 3, step: 0.05, label: 'saturate' },
+-      brightness: { value: 1, min: 0, max: 2, step: 0.05, label: 'brightness' },
+-      objectPosition: {
+-        value: 'top left',
+-        options: ['top left', 'top right', 'bottom left', 'bottom right', 'center', 'top', 'bottom', 'left', 'right'],
+-        label: 'position'
+-      },
+-      scale: { value: 160, min: 100, max: 300, step: 5, label: 'height (dvh)' }
++      opacity: { value: 0.42, min: 0, max: 1, step: 0.01 },
++      blendMode: { value: 'normal' as BlendMode, options: BLEND_MODES, label: 'blend' },
++      fontSizeVw: { value: 2.7, min: 1, max: 6.5, step: 0.05, label: 'font vw' },
++      scale: { value: 1.16, min: 0.6, max: 3.6, step: 0.02, label: 'scale' },
++      top: { value: 23, min: -12, max: 74, step: 1, label: 'top %' }
+     },
+     { collapsed: true }
+   )
+@@ -91,28 +110,35 @@ export function Backdrop() {
+     <>
+       <Leva collapsed hidden={!import.meta.env.DEV || !controlsOpen} titleBar={{ title: 'backdrop', drag: true }} />
+ 
+-      {on && statue.enabled && (
++      {on && caduceus.enabled && (
+         <div
+           aria-hidden
+-          className="pointer-events-none absolute inset-0 z-2"
++          className="pointer-events-none absolute inset-0 z-2 overflow-hidden"
+           style={{
+-            mixBlendMode: statue.blendMode as CSSProperties['mixBlendMode'],
+-            opacity: statue.opacity
++            mixBlendMode: caduceus.blendMode as CSSProperties['mixBlendMode'],
++            opacity: caduceus.opacity
+           }}
+         >
+-          <img
+-            alt=""
+-            className="w-auto min-w-dvw object-cover"
+-            fetchPriority="low"
+-            src={assetPath('ds-assets/filler-bg0.jpg')}
++          <pre
++            className="absolute left-1/2 m-0 select-none whitespace-pre text-center leading-[0.92] tracking-[0]"
+             style={{
+-              height: `${statue.scale}dvh`,
+-              objectPosition: statue.objectPosition,
+-              filter: `invert(calc(${statue.invert ? 1 : 0} * var(--backdrop-invert-mul, 1))) saturate(${statue.saturate}) brightness(${statue.brightness})`
++              fontFamily: '"Cascadia Code", "Cascadia Mono", "JetBrains Mono", Consolas, monospace',
++              fontSize: `clamp(22px, ${caduceus.fontSizeVw}vw, 76px)`,
++              textShadow: '0 0 24px rgba(242, 183, 5, 0.12)',
++              top: `${caduceus.top}%`,
++              transform: `translateX(-50%) scale(${caduceus.scale})`,
++              transformOrigin: '50% 0%'
+             }}
+-          />
++          >
++            {HERMES_CADUCEUS.map((line, index) => (
++              <span key={`${line.tone}:${index}`} style={{ color: CADUCEUS_COLORS[line.tone] }}>
++                {line.text}
++                {index < HERMES_CADUCEUS.length - 1 ? '\n' : ''}
++              </span>
++            ))}
++          </pre>
+         </div>
+       )}
+     </>
+   )
+-}
++}
+\ No newline at end of file
+diff --git a/apps/desktop/src/components/chat/intro.tsx b/apps/desktop/src/components/chat/intro.tsx
+index 6dc365e64..37d73f457 100644
+--- a/apps/desktop/src/components/chat/intro.tsx
++++ b/apps/desktop/src/components/chat/intro.tsx
+@@ -1,4 +1,4 @@
+-import { type CSSProperties, useState } from 'react'
++import { useState } from 'react'
+ 
+ import { capitalize, normalize } from '@/lib/text'
+ 
+@@ -166,16 +166,12 @@ export function Intro({ personality, seed }: IntroProps) {
+       data-slot="aui_intro"
+     >
+       <div className="w-full min-w-0">
+-        <p
++        <img
+           aria-label={WORDMARK}
+-          className="fit-text mx-auto mb-1 w-[calc(100%-1rem)] font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] text-midground mix-blend-plus-lighter dark:text-foreground/90"
+-          style={{ '--fit-min': '2.75rem' } as CSSProperties}
+-        >
+-          <span>
+-            <span>{WORDMARK}</span>
+-          </span>
+-          <span aria-hidden="true">{WORDMARK}</span>
+-        </p>
++          alt={WORDMARK}
++          src="data:image/png;base64,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"
++          className="mx-auto mb-2 w-full max-w-[46rem] select-none object-contain"
++        />
+ 
+         <p className="m-0 text-center leading-normal tracking-tight">{copy.body}</p>
+       </div>
+diff --git a/apps/desktop/src/components/page-loader.tsx b/apps/desktop/src/components/page-loader.tsx
+index 3589c6349..27882f9cb 100644
+--- a/apps/desktop/src/components/page-loader.tsx
++++ b/apps/desktop/src/components/page-loader.tsx
+@@ -27,7 +27,7 @@ export function PageLoader({
+         pathSteps={220}
+         role="presentation"
+         strokeScale={0.72}
+-        type="rose-curve"
++        type="caduceus"
+       />
+     </div>
+   )
+diff --git a/apps/desktop/src/components/ui/loader.tsx b/apps/desktop/src/components/ui/loader.tsx
+index 985a50cf5..9623e464f 100644
+--- a/apps/desktop/src/components/ui/loader.tsx
++++ b/apps/desktop/src/components/ui/loader.tsx
+@@ -3,6 +3,7 @@ import { type ComponentProps, useEffect, useRef } from 'react'
+ import { cn } from '@/lib/utils'
+ 
+ export const LOADER_TYPES = [
++  'caduceus',
+   'original-thinking',
+   'thinking-five',
+   'thinking-nine',
+@@ -64,6 +65,32 @@ interface BaseCurveOptions extends Pick<
+ const TWO_PI = Math.PI * 2
+ 
+ const LOADER_CURVES: Record<LoaderType, LoaderCurve> = {
++  caduceus: {
++    ...baseCurve('Caduceus', {
++      durationMs: 5200,
++      particleCount: 90,
++      pulseDurationMs: 4600,
++      strokeWidth: 4.2,
++      trailSpan: 0.58
++    }),
++    point(progress, detailScale) {
++      const top = 12
++      const bottom = 88
++      const span = bottom - top
++      const amp = 15 + detailScale * 4
++      const coils = 3
++
++      if (progress < 0.5) {
++        const u = progress * 2
++
++        return { x: 50 + amp * Math.sin(coils * Math.PI * u), y: top + span * u }
++      }
++
++      const u = (progress - 0.5) * 2
++
++      return { x: 50 - amp * Math.sin(coils * Math.PI * u), y: bottom - span * u }
++    }
++  },
+   'original-thinking': thinkingCurve('Original Thinking', 7, {
+     durationMs: 4600,
+     particleCount: 64,
+@@ -321,7 +348,7 @@ export function Loader({
+   pathSteps = 240,
+   role = 'status',
+   strokeScale = 1,
+-  type = 'rose-curve',
++  type = 'caduceus',
+   ...props
+ }: LoaderProps) {
+   const config = LOADER_CURVES[type]
+@@ -374,7 +401,7 @@ export function Loader({
+       <svg aria-hidden="true" className="size-full overflow-visible" fill="none" viewBox="0 0 100 100">
+         <g ref={groupRef}>
+           <path
+-            opacity="0.1"
++            opacity="0.26"
+             ref={pathRef}
+             stroke="currentColor"
+             strokeLinecap="round"

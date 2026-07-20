@@ -1,0 +1,15 @@
+diff --git a/apps/desktop/src/global.d.ts b/apps/desktop/src/global.d.ts
+index 9202c28e7..99cc5a084 100644
+--- a/apps/desktop/src/global.d.ts
++++ b/apps/desktop/src/global.d.ts
+@@ -78,6 +78,10 @@ declare global {
+       readFileText: (filePath: string) => Promise<HermesReadFileTextResult>
+       selectPaths: (options?: HermesSelectPathsOptions) => Promise<string[]>
+       writeClipboard: (text: string) => Promise<boolean>
++      getSystemResources: () => Promise<{
++        ram: { total: number; used: number }
++        vram: { total: number; used: number } | null
++      }>
+       saveImageFromUrl: (url: string) => Promise<boolean>
+       saveImageBuffer: (data: ArrayBuffer | Uint8Array, ext: string) => Promise<string>
+       saveClipboardImage: () => Promise<string>

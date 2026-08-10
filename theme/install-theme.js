@@ -18,6 +18,12 @@
   // 2) activate it (default profile) + dark mode — raw strings, per lib/storage.persistString
   localStorage.setItem('hermes-desktop-theme-v2', t.name);
   localStorage.setItem('hermes-desktop-mode-v1', 'dark');
+  // 3) turn the status bar on (newer Hermes hides it by default and the pack's
+  //    gold telemetry tape lives inside it) — but only when the user has never
+  //    set a preference, so an explicit later hide (Ctrl/Cmd+Shift+S) sticks.
+  //    Codecs.bool stores raw 'true'/'false'.
+  const SB = 'hermes.desktop.statusbarVisible';
+  if (localStorage.getItem(SB) === null) localStorage.setItem(SB, 'true');
   console.log('Installed + activated:', t.label);
   location.reload();
 })();

@@ -10,5 +10,11 @@
     "commit": "d7b36070ef807841699ad32c5b6af547fee3ff64",
     "appVersion": "0.17.0",
     "electronExt": "ts"
+  },
+  {
+    "id": "0.17.0-3bd844e",
+    "commit": "3bd844edf1777a680115f88a68474b4fb434092f",
+    "appVersion": "0.17.0",
+    "electronExt": "ts"
   }
 ]

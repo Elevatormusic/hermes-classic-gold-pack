@@ -1,0 +1,15 @@
+diff --git a/apps/desktop/src/global.d.ts b/apps/desktop/src/global.d.ts
+index 3816afa69..cadae5882 100644
+--- a/apps/desktop/src/global.d.ts
++++ b/apps/desktop/src/global.d.ts
+@@ -164,6 +164,10 @@ declare global {
+       }) => Promise<null | string>
+       writeClipboard: (text: string) => Promise<boolean>
+       readClipboard: () => Promise<string>
++      getSystemResources: () => Promise<{
++        ram: { total: number; used: number }
++        vram: { total: number; used: number } | null
++      }>
+       saveImageFromUrl: (url: string) => Promise<boolean>
+       saveImageBuffer: (data: ArrayBuffer | Uint8Array, ext: string) => Promise<string>
+       saveClipboardImage: () => Promise<string>

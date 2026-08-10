@@ -2,6 +2,8 @@
    (Ctrl+Shift+I → Console), press Enter.  Installs + activates the gold theme
    (dark mode) and reloads.  To revert: pick another theme in Appearance, or run
    localStorage.setItem('hermes-desktop-theme-v2','nous');location.reload();      */
+/* eslint-disable -- browser-console paste snippet, not Node code; the theme
+   object is kept as verbatim JSON (double quotes / quoted props) on purpose. */
 (() => {
   const t = {
     "name": "hermes-classic-gold", "label": "Classic Hermes",

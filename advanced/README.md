@@ -63,6 +63,10 @@ node advanced/statusbar/apply-statusbar.mjs --repo "<path-to>/hermes-agent"
 # --no-build stages the files but skips `npm run pack`
 ```
 
+> ℹ️ Newer Hermes versions ship the status bar **hidden by default**
+> (`hermes.desktop.statusbarVisible`). The theme installer enables it when no
+> preference is set; the in-app toggle is **Ctrl/Cmd+Shift+S**.
+
 ## Caduceus extras (optional, independent)
 
 The caduceus loader (two entwined sine-snakes), the resized/centered backdrop,

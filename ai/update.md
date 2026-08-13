@@ -1,63 +1,90 @@
-# Update prompt — keep Classic Gold through a Hermes-Agent update
+# Update Classic Gold and Hermes safely
 
-A Hermes-Agent update rebuilds the app from source and wipes the advanced tier
-(status bar + caduceus). You don't need to run anything yourself or remember a
-command — just hand the short prompt below to your AI assistant. It updates
-Hermes **and** re-applies the pack, and fixes anything that breaks along the way.
+A current Classic Gold install is a run-time plug-in under `HERMES_HOME`. A
+normal Hermes update does not need to reapply it or rebuild the desktop.
 
-> Prefer this over the in-app **Update** button — that button leaves you
-> un-themed, and over a plain command it can't self-heal if something drifts.
+## Select exact targets
 
-## The short prompt (copy this to your assistant)
+Confirm the profile and checkout before any update:
 
-```
-Update my Hermes-Agent and re-apply my Classic Gold theme + status bar. Open
-github.com/Elevatormusic/hermes-classic-gold-pack, read ai/update.md, and follow
-it. Self-heal via ai/brokenupdatefix.md and ai/repair.md before asking me anything.
+```text
+<HERMES_HOME>/desktop-plugins/classic-gold/plugin.js
+<HERMES_HOME>/plugins/classic-gold/dashboard/manifest.json
+<path-to-hermes-agent>/apps/desktop/
 ```
 
-That's it — the rest of this file is instructions for the assistant.
+Use `--home` for the profile and `--repo` for the checkout. Do not use an
+auto-detected path when more than one profile or checkout can match.
 
----
+## Current run-time install
 
-## Instructions for the assistant
-
-**Goal:** update Hermes-Agent and bring the user's Classic Gold pack back, with
-no manual steps for them. Do NOT hand the user shell commands to run — you run
-them, and you fix failures yourself.
-
-**1. Get the pack.** Clone `https://github.com/Elevatormusic/hermes-classic-gold-pack`
-and `cd` in (skip if already there).
-
-**2. See the current state:**
+Run the normal update:
 
 ```bash
-node scripts/diagnostics.mjs status
+hermes update
 ```
 
-**3. Run the seamless updater.** It quits Hermes, runs `hermes update`, re-applies
-the installed tiers (auto-detected from the live source + the pack stamp, BEFORE
-the update wipes them), rebuilds once, and relaunches:
+The optional guard wrapper checks the exact profile and checkout for known
+legacy source-patch markers before it starts the same update:
 
 ```bash
-node update-hermes.mjs
+node update-hermes.mjs --home "<HERMES_HOME>" --repo "<path-to-hermes-agent>"
 ```
 
-- If the user **already clicked the in-app Update button** and lost the theme,
-  re-apply only: `node update-hermes.mjs --no-update`.
-- Pass `--branch <name>` only if their checkout tracks a non-`main` branch.
+The wrapper does not patch, rebuild, reinstall, restart, or relaunch Hermes.
 
-**4. Self-heal BEFORE asking the user** (loop up to 3×):
+## Update the Gold Pack
 
-- Read the command output, and `node scripts/diagnostics.mjs --logs`.
-- Match the symptom to a row in [`ai/brokenupdatefix.md`](brokenupdatefix.md) and
-  apply that fix, then re-run.
-- If a tier **refused** because the user's Hermes version diverged from the pack
-  base, reconcile it via [`ai/repair.md`](repair.md), then re-run with
-  `--no-update`. (The updater refuses rather than regressing — that's expected.)
+Update this Pack checkout, preview the same profile, reinstall, and then fully
+restart Hermes Desktop:
 
-**5. Verify, then report.** `node scripts/diagnostics.mjs status` should show the
-tiers `applied`; relaunch Hermes and confirm the status bar + theme are back.
-Only ask the user as a **last resort, once** — and for a visual-only problem, ask
-for a screenshot plus the DevTools console. If it truly can't be fixed, follow
-[`ai/issuereport.md`](issuereport.md).
+```bash
+git pull --ff-only
+node install.mjs --dry-run --home "<HERMES_HOME>" --activate noir-neko-ascii-fine
+node install.mjs --home "<HERMES_HOME>" --activate noir-neko-ascii-fine
+```
+
+Keep `--home` explicit for an automated install. `--yes` can skip confirmation
+for one auto-detected profile, but it cannot select between profiles. The
+installer keeps the first pre-install backup for each managed file and refuses
+to overwrite a later user edit.
+
+## Existing legacy source-patch install
+
+Do not update while an old TelemetryTape or caduceus source patch is present.
+Migration is restore-only. It does not install the new plug-in. Use this exact
+order:
+
+```bash
+node scripts/migrate-to-plugin.mjs --dry-run --home "<HERMES_HOME>" --repo "<path-to-hermes-agent>"
+node scripts/migrate-to-plugin.mjs --home "<HERMES_HOME>" --repo "<path-to-hermes-agent>" --yes
+hermes update
+node install.mjs --home "<HERMES_HOME>" --activate noir-neko-ascii-fine
+```
+
+Then fully quit and start Hermes Desktop. The execution command uses `--yes`
+only after review of the dry run. It skips confirmation. It does not resolve an
+ambiguous profile or bypass a file safety check.
+
+Migration stops before any write when a source file is missing, user-edited, or
+lacks exact same-version ownership proof. If it stops, follow
+[`brokenupdatefix.md`](brokenupdatefix.md). Do not use `git reset --hard`, drop an
+update stash, or copy an old baseline over current Hermes files.
+
+## Verify after the full restart
+
+1. Confirm that **Classic Gold** is enabled in **Settings > Plugins**.
+2. Confirm that **Classic Hermes** is present in **Settings > Appearance**.
+3. Compare a full-window screenshot with the repository reference.
+4. Open the quick customizer and the full settings page. Confirm that saved
+   values remain.
+5. Test the model, reasoning, provider, and context controls.
+6. Confirm that the active session hides the duplicate composer model selector
+   and that a new draft keeps it.
+7. Complete one turn and check the final-turn rate and session cost. `--` is the
+   correct cost when Hermes did not record an actual or included value.
+8. Check RAM and VRAM. They cover the complete backend host. For a remote
+   profile, confirm that the remote backend was also installed and restarted.
+
+If the theme works but all backend values are absent, do a full restart before
+you use a renderer reload. A renderer reload cannot mount the Python route.

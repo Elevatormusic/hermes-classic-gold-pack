@@ -1,0 +1,12 @@
+{
+  "name": "classic-gold",
+  "label": "Classic Gold Telemetry",
+  "version": "1.2.0",
+  "tab": {
+    "path": "/classic-gold",
+    "position": "end",
+    "hidden": true
+  },
+  "entry": "dist/index.js",
+  "api": "plugin_api.py"
+}

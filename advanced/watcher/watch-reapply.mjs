@@ -21,13 +21,13 @@ const PACK_ROOT = join(HERE, '..', '..')
 const SENTINEL_FILE = 'apps/desktop/src/app/shell/statusbar-controls.tsx'
 const SENTINEL = 'function TelemetryTape'
 
-function packWasApplied() {
+function legacyPackWasApplied() {
   try {
     const home = resolveHermesHome({})
     const stampPath = home && join(home, 'hermes-classic-gold-pack.json')
     if (stampPath && existsSync(stampPath)) {
       const stamp = JSON.parse(readFileSync(stampPath, 'utf8'))
-      return Boolean(stamp?.applied && Object.keys(stamp.applied).length)
+      return Boolean(stamp?.applied?.statusbar || stamp?.applied?.caduceus)
     }
   } catch {
     /* no stamp */
@@ -58,7 +58,7 @@ function notify(text) {
 function main() {
   const repo = resolveAgentRepo({})
   if (!existsSync(join(repo, 'apps', 'desktop'))) return 0
-  if (!packWasApplied()) return 0 // never installed → nothing to nag about
+  if (!legacyPackWasApplied()) return 0 // no legacy source tier → nothing to warn about
   if (!tierIsStock(repo)) return 0 // still themed → all good
 
   // Only nag when the checkout actually moved (a real update), not just any
@@ -70,9 +70,9 @@ function main() {
     /* ignore */
   }
   notify(
-    `Hermes updated${head ? ` to ${head}` : ''} and reverted the Classic Gold theme. ` +
-      `To restore it: fully quit Hermes, then run  node update-hermes.mjs --no-update  ` +
-      `in ${PACK_ROOT}. (See ai/brokenupdatefix.md if anything fails.)`
+    `Hermes updated${head ? ` to ${head}` : ''} and a legacy Classic Gold source stamp remains. ` +
+      `Migrate with node scripts/migrate-to-plugin.mjs in ${PACK_ROOT} before the next update. ` +
+      `(See ai/brokenupdatefix.md if migration stops.)`
   )
   return 0
 }

@@ -1,98 +1,103 @@
-# Report a problem — instructions for an AI assistant
+# Report a Classic Gold problem
 
-Something in the **Hermes-Agent "Classic Gold" pack** isn't working. Your job
-order is: **fix it first → if it's genuinely unfixable, file a good issue for the
-user automatically** (they shouldn't have to upload anything or click a link).
+Try the safe run-time recovery steps before you file an issue. Do not change the
+Hermes source checkout for a renderer, backend, theme, settings, or pet problem.
 
-> **You need shell + file access.** If you can't run commands, run
-> `node scripts/diagnostics.mjs --logs` for the user and hand them the pre-filled
-> issue link it prints.
+## 1. Try the safe checks
 
-## Step 1 — Try to FIX it first (don't report a fixable problem)
+1. Record the exact `HERMES_HOME`. Confirm these files:
 
-Exhaust the self-heal before reporting. Most problems are fixable here:
+   ```text
+   HERMES_HOME/desktop-plugins/classic-gold/plugin.js
+   HERMES_HOME/plugins/classic-gold/dashboard/manifest.json
+   HERMES_HOME/plugins/classic-gold/dashboard/plugin_api.py
+   HERMES_HOME/plugins/classic-gold/dashboard/dist/index.js
+   ```
 
-- Re-read the failing command's own output.
-- Run `node scripts/diagnostics.mjs --logs` and read the Hermes-Agent log tails
-  (`errors.log`, `desktop.log`, `agent.log`, `gateway.log`); check for `.rej`
-  files from a rejected `git apply`.
-- Follow [`ai/install.md`](install.md) (the self-heal loop) and
-  [`ai/repair.md`](repair.md) (reconcile a patch that rejected on a different
-  Hermes-Agent version). Loop up to 3 times.
+2. Confirm that `classic-gold` is enabled in `config.yaml` and in
+   **Settings > Plugins**.
+3. Fully quit and start Hermes Desktop. A renderer reload cannot mount the
+   Python route.
+4. For a remote profile, confirm that the backend files and config entry are on
+   the remote backend host. Restart that backend or gateway too.
+5. Run diagnostics and read the local output:
 
-Only continue to reporting if it truly cannot be fixed.
+   ```bash
+   node scripts/diagnostics.mjs --logs
+   ```
 
-## Step 2 — Gather diagnostics
+6. Use the troubleshooting table and the first-start checklist in `README.md`.
+   Test an interaction and capture a screenshot before and after the failure.
+
+Do not report `--` as a false value without checking the telemetry contract.
+Speed needs a completed turn. Cost needs an actual or included Hermes cost
+record. RAM and VRAM cover the full backend host. VRAM also needs NVIDIA
+`nvidia-smi`.
+
+If diagnostics show a legacy source patch, stop the normal recovery. Use
+[`brokenupdatefix.md`](brokenupdatefix.md). Use [`repair.md`](repair.md) only
+when restore-only migration cannot prove a safe file restore.
+
+## 2. Gather a private summary
 
 ```bash
-node scripts/diagnostics.mjs --logs --error "<one line: what failed>"
+node scripts/diagnostics.mjs --logs --error "<one-line failure>"
 ```
 
-Note the environment (OS, Node, Hermes-Agent commit, on-base?) and read the logs
-so your summary is accurate. **Do not paste raw logs** into the issue — they can
-contain prompts and local paths. Summarize instead; include raw logs only if the
-user explicitly asks.
+Record the operating system, Node version, Pack version, Hermes version and
+commit, exact command with private paths removed, profile type, and whether a
+full restart occurred. For telemetry, record whether the backend is local or
+remote and whether `nvidia-smi` works on that host.
 
-## Step 3 — File the issue automatically
+Do not paste raw logs. They can contain prompts, session metadata, local paths,
+branch names, and secrets. Summarize the relevant error. Include raw content
+only after the user reviews it and gives explicit approval.
 
-Don't make the user click or accept a link. **Check for duplicates, then file it
-directly:**
+## 3. Search and file
+
+Search open issues first. Comment on an exact match instead of making a
+duplicate:
 
 ```bash
-# 1. Avoid duplicates — comment on a match instead of opening a new one.
 gh issue list --repo Elevatormusic/hermes-classic-gold-pack --state open --search "<keywords>"
-
-# 2. File it (fill the template below into the body).
-gh issue create \
-  --repo Elevatormusic/hermes-classic-gold-pack \
-  --title "<concise, specific title>" \
-  --body "$(cat <<'EOF'
-<filled template>
-EOF
-)"
 ```
 
-Then tell the user: *"I filed this as an issue — <url>."* Give them the URL the
-command returns.
+If no issue matches, use the repository issue template. A direct `gh issue
+create` command needs the user's authorization because it writes to GitHub. If
+`gh` is not installed or authenticated, give the user the pre-filled issue URL
+from diagnostics.
 
-**If the problem is visual** — something renders wrong, is missing, or looks off
-(a broken layout, a hidden panel, a mangled glyph) — **a screenshot is worth more
-than any description.** `gh` can't upload images, so ask the user to add one:
-open the issue URL, scroll to the comment box, and **drag the screenshot in** (or
-click the paperclip). Say it in one line, e.g. *"This is a visual glitch, so a
-screenshot would really help — open <url> and drag one into the comment box."*
+For a visual problem, ask the user to add the two screenshots. Remove or cover
+workspace names, branch names, provider details, and other private metadata.
 
-**Fallback:** if `gh` isn't installed or authenticated, run
-`node scripts/diagnostics.mjs --logs` and give the user the pre-filled
-`issues/new?...` URL it prints so they can open it in one click.
-
-## Issue template — fill this into the `--body`
+## Issue body
 
 ```markdown
-### What's wrong
-<one short paragraph: the symptom, in plain language>
+### What failed
+<one short paragraph with the visible or command symptom>
 
-### What I tried (self-heal)
-<the fixes you attempted from ai/install.md / ai/repair.md and why they didn't resolve it>
+### Area
+<installer | renderer plug-in | telemetry backend | theme and settings | pets | legacy migration | uninstall>
 
-### Suspected area
-<theme / pets / status bar / caduceus extras / installer — name the file or patch if known>
+### Exact flow
+<dry run, command, full restart, and minimal reproduction steps; remove private paths>
+
+### Expected telemetry state
+<actual | included | unknown | not applicable; local or remote backend; nvidia-smi result>
 
 ### Environment
-<paste the "### Environment" block printed by `node scripts/diagnostics.mjs` — env only, no raw logs>
+<the diagnostics environment block only; no raw logs or private paths>
 
-### Screenshot
-<for a visual issue, attach one after filing — drag it into the comment box (see the screenshot note above)>
+### Interaction checks
+<which model, reasoning, provider, context, customizer, and selector checks passed or failed>
 
-### Repro
-<minimal steps to reproduce, if known>
+### Screenshots
+<attach a redacted initial full-window image and a redacted failure image>
+
+### Safe recovery tried
+<full restart, renderer reload, reinstall, or restore-only migration; do not apply a legacy patch>
 ```
 
-## Rules
-
-- **Fix first;** only file if the problem is genuinely unfixable.
-- **One issue.** Search open issues first and comment on a match rather than duplicating.
-- Keep the **title specific** (e.g. `status bar patch rejects on hermes-agent@<sha>`),
-  not "it doesn't work."
-- **Never** include raw logs, secrets, tokens, or personal paths unless the user opts in.
-- If you filed it, tell the user the URL — don't ask them to submit anything.
+Keep the title specific. For example: `telemetry backend route missing after
+Pack reinstall on Hermes 0.20.0`. Do not use patch-era terms for a current
+run-time problem.

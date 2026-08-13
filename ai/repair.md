@@ -1,84 +1,93 @@
-# Patch-repair prompt
+# Remove an unsafe legacy source patch
 
-Use this when an advanced patch (`status bar` or `caduceus extras`) does **not**
-apply cleanly because your Hermes version differs from every stored baseline's
-commit (run `node scripts/diagnostics.mjs status` — it prints your detected app
-version, electron layer, and the selected baseline, or "NONE match"). Paste the
-block below into your coding assistant. It also works in plain chat if you paste
-your current files.
+Use this guide only when restore-only migration stops because it cannot prove a
+safe automatic restore. This is a removal procedure. Do not port, reapply, or
+rebuild the old status-bar or caduceus source patch.
 
-> For a broad post-update recovery playbook (blank screen, `tsc` errors, orphan
-> files, missing composer/tape/background), see **[`brokenupdatefix.md`](brokenupdatefix.md)**
-> — this file is specifically the *version-divergence* case.
+For a normal run-time plug-in problem, use the troubleshooting table in
+`README.md`. Do not edit the Hermes checkout.
 
----
+## Goal
 
+Return only proved Classic Gold source edits to the current Hermes `HEAD`
+content while you preserve all unrelated user changes, index state, and stashes.
+Then use the current run-time plug-in architecture.
+
+## Evidence first
+
+1. Identify the exact profile and checkout. Record:
+
+   ```bash
+   git -C "<path-to-hermes-agent>" status --short --branch
+   git -C "<path-to-hermes-agent>" rev-parse HEAD
+   git -C "<path-to-hermes-agent>" diff --cached --name-status
+   git -C "<path-to-hermes-agent>" stash list
+   ```
+
+2. Run the migration dry run with both explicit paths:
+
+   ```bash
+   node scripts/migrate-to-plugin.mjs --dry-run --home "<HERMES_HOME>" --repo "<path-to-hermes-agent>"
+   ```
+
+3. Read `HERMES_HOME/hermes-classic-gold-pack.manifest.json`. For each reported
+   file, identify the recorded method, Hermes `HEAD`, original path, and
+   installed hash or blob hash.
+4. Compare three versions of each file:
+
+   - the current worktree file;
+   - the same path at current `HEAD`;
+   - the matching Pack legacy payload under `advanced/`, if one exists.
+
+Do not treat a similar file, a stale `.orig`, or a baseline version name as
+ownership proof.
+
+## Removal rules
+
+- If the current file exactly matches a known Pack payload and `.orig` exactly
+  matches the same path at current `HEAD`, let migration restore it.
+- If the current file includes both Pack hunks and later user edits, save the
+  proved user hunks in a separate reviewed patch or copy outside the checkout.
+  Automatic migration requires the live target to match the recorded or
+  bundled Pack-installed blob. After a manual cleanup makes the live file equal
+  to current `HEAD`, that file needs no automatic restore.
+- If the current file was deleted, do not recreate it until you prove that the
+  deletion was accidental and the user approves the restore.
+- If a conflict includes an updater stash, do not drop or clear the stash.
+- Do not replace a complete current file with an old baseline file.
+- Do not use `git reset --hard`, `git checkout -- .`, or a broad `git restore`.
+- Show the proposed per-file diff to the user before you write a manual repair.
+
+If exact hunk ownership is not clear, stop and report the file as blocked. A
+wrong restore can erase user work.
+
+For a mixed file, show the saved user-only patch and its destination to the
+user. After approval, restore only that exact target to current `HEAD`. Run
+migration and the Hermes update. Then replay the user-only patch against the new
+source and review the result. Do not use a broad restore command.
+
+## Complete the migration
+
+After manual removal, rerun the dry run. Continue only when it has no unsafe
+file:
+
+```bash
+node scripts/migrate-to-plugin.mjs --dry-run --home "<HERMES_HOME>" --repo "<path-to-hermes-agent>"
+node scripts/migrate-to-plugin.mjs --home "<HERMES_HOME>" --repo "<path-to-hermes-agent>" --yes
+hermes update
+node install.mjs --home "<HERMES_HOME>"
 ```
-Goal: apply this pack's <status bar | caduceus extras> change to my Hermes
-version, which the shipped patch does not apply to cleanly.
 
-FIRST identify your era: check apps/desktop/electron/main.{ts,cjs} — `.ts` is the
-newer layer, `.cjs` the older. Then pick the CLOSEST baseline from
-advanced/baselines.json (prefer one whose electronExt matches, newest appVersion
-≤ yours) and read ITS inputs — do NOT use a hardcoded baseline:
-  - advanced/<tier>/baselines/<id>/hermes-<tier>.patch      → the exact intended diff
-  - advanced/<tier>/baselines/<id>/files/apps/desktop/…     → the full intended post-edit files
-  - that baseline's commit: the `commit` field for <id> in advanced/baselines.json
-  (<tier> is "statusbar" (files: hermes-statusbar.patch) or "extras-caduceus"
-   (files: hermes-caduceus.patch).)
+Then fully quit and start Hermes Desktop. Do not install the renderer or backend
+before the clean Hermes update finishes.
 
-PROCEDURE — do NOT blindly overwrite my files:
-  1. For each target file, compare the pack's post-edit files/ version against
-     MY current file at the same path in my hermes-agent checkout.
-  2. Port the INTENT of the change into my current file: new imports, the new
-     component logic (the TelemetryTape HUD with its inlined useSystemResources
-     hook, the caduceus LoaderCurve, the Backdrop settings, the pixel wordmark),
-     the composer dock-offset clamp, the model-pill hide, and the system-resource
-     IPC (electron/main.cjs handler + electron/preload.cjs bridge). Keep MY
-     version's surrounding code, names, and refactors intact.
-  3. TYPE-DECLARATION FILES ARE ADDITIVE ONLY. For global.d.ts and
-     types/hermes.ts, SPLICE IN the pack's added declarations (getSystemResources;
-     the UsageStats telemetry fields) — never replace the whole file, or you may
-     drop a newer bridge API (e.g. window.hermes.zoom) and break `tsc`.
-  4. use-system-resources.ts is CONDITIONAL — check before deleting. The current
-     pack folds system resources into the IPC, so if you migrated
-     statusbar-controls.tsx to `window.hermesDesktop.getSystemResources`, the old
-     `app/shell/hooks/use-system-resources.ts` is a dangling orphan → delete it.
-     BUT if your reconciled statusbar-controls.tsx still
-     `import { useSystemResources } from '@/app/shell/hooks/use-system-resources'`
-     and calls it, the file is NOT orphan — deleting it breaks the build. Only
-     remove it once nothing imports it.
-  5. If you kept the renderer-hook design, make sure the IPC it reads actually
-     EXISTS: `electron/main.cjs` must have the `hermes:system-resources` handler
-     and `electron/preload.cjs` the `getSystemResources` bridge — otherwise
-     RAM/VRAM silently reads blank with no error (see brokenupdatefix.md).
-  6. Show me a diff of what you changed before writing.
+## Verify
 
-THEN build (Hermes fully quit):
-  cd apps/desktop && npm run pack
-  Relaunch Hermes to verify.
+- `git status` shows only user-intended changes.
+- No known Classic Gold source marker remains.
+- The renderer and backend are under the exact `HERMES_HOME`.
+- **Classic Gold** is enabled in **Settings > Plugins**.
+- The first-start screenshot and interaction checklist in `README.md` passes.
 
-VERIFY AND SELF-HEAL (do this yourself before asking me anything):
-  - Read the `npm run pack` output for TypeScript/build errors; if it fails,
-    read the error, fix the merge, rebuild. Repeat up to 3 times.
-  - After relaunch, run `node scripts/diagnostics.mjs --logs` and read
-    errors.log / desktop.log for renderer errors (e.g. ERR_FILE_NOT_FOUND, a
-    stack trace, "Unexpected end of input"). A blank window almost always shows
-    up there. Fix and rebuild rather than asking me.
-  - Only if it's a purely VISUAL problem with clean logs, ask me — in ONE
-    message — for a screenshot of the affected area AND the DevTools console
-    (Ctrl/Cmd+Shift+I → Console). Then finish the fix.
-
-CAPTURE THE RECONCILE AS A NEW BASELINE (so the next user on this version gets a
-clean install): once the build is green, snapshot the reconciled tree into a new
-baseline in the pack repo:
-  - advanced/<tier>/baselines/<appVersion>-<shortsha>/files/…  (full post-edit files)
-  - advanced/<tier>/baselines/<appVersion>-<shortsha>/hermes-<tier>.patch
-    = `git -C <hermes-agent> diff -- <the tier's files>` (LF-normalized)
-  - for statusbar, also additive/{global.d.ts,types-hermes.ts}.patch
-  - add a row to advanced/baselines.json: { id, commit (your HEAD), appVersion,
-    electronExt } and open a PR.
-
-PLAIN-CHAT FALLBACK: if you can't read my files directly, ask me to paste each
-current target file; return the merged version for me to save.
-```
+Do not create a new legacy baseline as part of this repair. The supported result
+is the run-time plug-in, not another source-patched Hermes build.

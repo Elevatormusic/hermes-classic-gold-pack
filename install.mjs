@@ -1,66 +1,79 @@
 #!/usr/bin/env node
-// install.mjs — orchestrated installer for the Classic Gold pack: pets, the
-// optional advanced tiers (status bar / caduceus), and the theme, in one
-// consented flow with a plan + --dry-run. Without --advanced/--theme it installs
-// the pets and prints the theme instructions (the classic behaviour).
-import { readFileSync, writeFileSync, copyFileSync, existsSync, readdirSync } from 'node:fs'
-import { execFileSync, spawnSync } from 'node:child_process'
+// Install the update-safe Classic Gold plug-in and the optional Noir Neko pets.
+// Legacy source patches and the old localStorage theme helper are retired.
+import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 import { resolveHermesHome, findHermesHomes } from './lib/hermes-home.mjs'
 import { preflight, reportPreflight } from './lib/preflight.mjs'
-import { recordApplied, appendManifest, classifyState, formatReceipt } from './lib/pack-stamp.mjs'
-import { selectBaseline } from './lib/baseline.mjs'
-import { resolveAgentRepo } from './lib/agent-repo.mjs'
+import { formatReceipt, readStamp, recordApplied, withHomeTransactionLock } from './lib/pack-stamp.mjs'
 import { installPets } from './lib/pets.mjs'
-import { activatePetInConfig } from './lib/config-edit.mjs'
+import { installDesktopPlugin } from './lib/desktop-plugin.mjs'
+import { installPetConfig, recoverPendingPetConfig } from './lib/pet-config.mjs'
+import { installPluginBackend } from './lib/plugin-backend.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const TIER_SCRIPTS = {
-  statusbar: join(HERE, 'advanced', 'statusbar', 'apply-statusbar.mjs'),
-  caduceus: join(HERE, 'advanced', 'extras-caduceus', 'apply-caduceus.mjs'),
-}
-
+const PACK_VERSION = JSON.parse(readFileSync(join(HERE, 'package.json'), 'utf8')).version
 function parseArgs(argv) {
   const args = {
     home: undefined, repo: undefined, activate: undefined,
-    advanced: [], theme: undefined, yes: false, dryRun: false, help: false,
+    advanced: [], desktopPlugin: true, pluginBackend: undefined, pets: true,
+    yes: false, dryRun: false, help: false, unsupported: [],
   }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
-    if (a === '--home') args.home = argv[++i]
-    else if (a === '--repo') args.repo = argv[++i]
-    else if (a === '--activate') args.activate = argv[++i]
-    else if (a === '--advanced') args.advanced = String(argv[++i] || '').split(',').map((s) => s.trim()).filter(Boolean)
-    else if (a === '--theme') args.theme = true
-    else if (a === '--no-theme') args.theme = false
+    if (['--home', '--repo', '--activate', '--advanced'].includes(a)) {
+      const value = argv[i + 1]
+      if (!value || value.startsWith('--')) {
+        args.unsupported.push(`${a} requires a value`)
+        continue
+      }
+      if (a === '--home') args.home = value
+      else if (a === '--repo') args.repo = value
+      else if (a === '--activate') args.activate = value
+      else args.advanced = String(value).split(',').map((item) => item.trim()).filter(Boolean)
+      i += 1
+    } else if (a === '--desktop-plugin') args.desktopPlugin = true
+    else if (a === '--no-desktop-plugin') args.desktopPlugin = false
+    else if (a === '--plugin-backend') args.pluginBackend = true
+    else if (a === '--no-plugin-backend') args.pluginBackend = false
+    else if (a === '--pets') args.pets = true
+    else if (a === '--no-pets') args.pets = false
     else if (a === '--yes' || a === '-y') args.yes = true
     else if (a === '--dry-run' || a === '--plan') args.dryRun = true
     else if (a === '--help' || a === '-h') args.help = true
+    else args.unsupported.push(a)
   }
+  if (args.pluginBackend === undefined) args.pluginBackend = args.desktopPlugin
   return args
 }
 
 const HELP = `hermes-classic-gold-pack installer
 
 Usage: node install.mjs [--home <path>] [--activate <slug>]
-                        [--advanced statusbar,caduceus] [--theme|--no-theme]
-                        [--repo <hermes-agent>] [--dry-run] [--yes]
+                        [--desktop-plugin|--no-desktop-plugin]
+                        [--plugin-backend|--no-plugin-backend]
+                        [--pets|--no-pets]
+                        [--dry-run] [--yes]
 
   --home <path>       Override HERMES_HOME (the dir that contains config.yaml)
   --activate <slug>   Set this pet active (noir-neko | noir-neko-ascii-fine)
-  --advanced <tiers>  Also apply advanced tiers (comma list: statusbar,caduceus).
-                      Stages both, then rebuilds once. Needs Hermes fully quit.
-  --theme / --no-theme  Run apply-theme.mjs (restarts Hermes) / skip it.
-                      Default: print the theme instructions without running.
-  --repo <path>       hermes-agent checkout for --advanced (default under LOCALAPPDATA)
+  --desktop-plugin    Install the update-safe theme, background, and status items.
+                      This is the default and does not change Hermes source.
+  --no-desktop-plugin  Skip the update-safe desktop plug-in.
+  --plugin-backend     Install the telemetry API. This follows the desktop
+                      plug-in choice unless you set it explicitly.
+  --no-plugin-backend  Skip the telemetry API and its config entry.
+  --pets               Install both Noir Neko pets. This is the default.
+  --no-pets            Do not install pets. This is useful on a remote backend.
   --dry-run, --plan   Print the plan and exit without changing anything
-  --yes, -y           Accept the auto-detected HERMES_HOME (and >1-install case)
+  --yes, -y           Skip the prompt for one auto-detected HERMES_HOME.
+                      It never selects between multiple profiles.
   --help, -h          Show this help
 
-Installs the two Noir Neko pets + the gold theme. One orchestrated flow: pets →
-advanced (rebuild once) → theme (restarts Hermes last). See advanced/README.md.`
+Installs the Classic Gold desktop plug-in and the two Noir Neko pets. The
+desktop plug-in is the recommended path. It survives normal Hermes updates.`
 
 function confirm(question) {
   return new Promise((resolve) => {
@@ -72,32 +85,21 @@ function confirm(question) {
   })
 }
 
-function currentHead(repo) {
-  try {
-    return execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim()
-  } catch {
-    return null
-  }
-}
-
 /** Install + optionally activate the pets, recording stamp + manifest. */
 function petsStep(home, args) {
   const bundled = join(HERE, 'pets')
   const petsDir = join(home, 'pets')
-  const bundledSlugs = existsSync(bundled)
-    ? readdirSync(bundled, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
-    : []
-  const preExisting = new Set(bundledSlugs.filter((s) => existsSync(join(petsDir, s))))
-  const slugs = installPets(bundled, petsDir)
-  console.log(`• Installed pets: ${slugs.join(', ')}  →  ${petsDir}`)
-  for (const slug of slugs) {
-    appendManifest(home, { type: 'pet', slug, dir: join(petsDir, slug), preExisting: preExisting.has(slug) })
+  const installed = installPets(bundled, petsDir, { home, version: PACK_VERSION })
+  const { slugs } = installed
+  const petsStamp = readStamp(home)?.applied?.pets
+  if (!petsStamp?.transactionId || !Array.isArray(petsStamp.files)) {
+    throw new Error('Pet file ownership stamp is incomplete.')
   }
+  console.log(`• Installed pets: ${slugs.join(', ')}  →  ${petsDir}`)
 
   let previousSlug = null
+  let activated = null
+  let activationOk = true
   if (args.activate) {
     if (!slugs.includes(args.activate)) {
       console.error(`✗ --activate "${args.activate}" is not one of: ${slugs.join(', ')}`)
@@ -107,39 +109,33 @@ function petsStep(home, args) {
     try {
       const original = readFileSync(cfgPath, 'utf8')
       previousSlug = (original.match(/slug:\s*(\S+)/) || [])[1] || null
-      // Never overwrite an existing .bak — the FIRST one is the pristine config.
-      if (!existsSync(cfgPath + '.bak')) copyFileSync(cfgPath, cfgPath + '.bak')
-      const updated = activatePetInConfig(original, args.activate)
-      writeFileSync(cfgPath, updated)
-      const check = readFileSync(cfgPath, 'utf8')
-      if (!(new RegExp(`slug: ${args.activate}\\b`).test(check) && /enabled: true/.test(check))) {
-        throw new Error('post-write validation failed')
-      }
-      appendManifest(home, { type: 'config', path: cfgPath, backup: cfgPath + '.bak', priorSlug: previousSlug })
-      console.log(`• Activated pet "${args.activate}" in config.yaml (backup: config.yaml.bak)`)
+      installPetConfig({
+        configPath: cfgPath,
+        home,
+        slug: args.activate,
+        version: PACK_VERSION,
+      })
+      recordApplied(home, 'pets', {
+        ...petsStamp,
+        activated: args.activate,
+        previousSlug,
+      }, { version: PACK_VERSION })
+      activated = args.activate
+      console.log(`• Activated pet "${args.activate}" in config.yaml (targeted receipt recorded)`)
     } catch (err) {
-      if (existsSync(cfgPath + '.bak')) copyFileSync(cfgPath + '.bak', cfgPath)
+      try {
+        recoverPendingPetConfig({ configPath: cfgPath, home, version: PACK_VERSION })
+      } catch {
+        // Keep the planned receipt for a later safe uninstall.
+      }
       console.error(`✗ Could not activate pet automatically (${err.message}).`)
       console.error('  Set it in-app: Settings → Pet, or edit config.yaml display.pet.slug.')
+      activationOk = false
     }
   } else {
     console.log('• (Pets installed but not activated — pass --activate <slug> or pick one in-app.)')
   }
-  recordApplied(home, 'pets', { slugs, activated: args.activate || null, previousSlug })
-  return { ok: true, slugs, activated: args.activate || null }
-}
-
-function printThemeInstructions() {
-  const snippetPath = join(HERE, 'theme', 'install-theme.js')
-  console.log('\n──────── Gold theme ────────')
-  console.log('Automatic (recommended):  node theme/apply-theme.mjs')
-  console.log('  Applies the theme for you — it restarts Hermes once, so run it last.')
-  console.log('  Falls back to a manual paste if it can’t run automatically.')
-  console.log('Manual:  open Hermes → Ctrl/Cmd+Shift+I → Console → paste')
-  console.log('  the contents of theme/install-theme.js → Enter.')
-  console.log('  Snippet path: ' + snippetPath)
-  console.log('────────────────────────────')
-  if (process.env.HCGP_PRINT_SNIPPET === '1') console.log('\n' + readFileSync(snippetPath, 'utf8'))
+  return { ok: activationOk, slugs, activated }
 }
 
 async function main(argv) {
@@ -148,7 +144,22 @@ async function main(argv) {
     console.log(HELP)
     return 0
   }
+  if (args.unsupported.length > 0) {
+    console.error(`✗ Unsupported or incomplete option: ${args.unsupported.join(', ')}`)
+    console.error('  Run `node install.mjs --help` for supported options.')
+    return 1
+  }
   if (!reportPreflight(preflight({ needsNode: 18 }))) return 1
+
+  if (!args.home) {
+    const homes = findHermesHomes()
+    if (homes.length > 1) {
+      console.error('✗ More than one Hermes profile has a config.yaml. The installer will not guess:')
+      for (const candidate of homes) console.error(`  - ${candidate}`)
+      console.error('  Re-run with --home <path>. --yes cannot select a profile.')
+      return 1
+    }
+  }
 
   const home = resolveHermesHome({ explicit: args.home })
   if (!home) {
@@ -156,28 +167,49 @@ async function main(argv) {
     console.error('  Pass --home <path-to-your-hermes-dir> (the folder that contains config.yaml).')
     return 1
   }
-  const repo = resolveAgentRepo({ explicit: args.repo, home })
-  for (const t of args.advanced) {
-    if (!TIER_SCRIPTS[t]) {
-      console.error(`✗ --advanced: unknown tier "${t}" (use: statusbar, caduceus).`)
-      return 1
-    }
+  if (args.repo) {
+    console.error('✗ --repo is not used by the supported installer.')
+    console.error('  Pass it to update-hermes.mjs, migrate-to-plugin.mjs, or uninstall.mjs when needed.')
+    return 1
+  }
+  if (args.activate && !args.pets) {
+    console.error('✗ --activate requires pet installation. Remove --no-pets or --activate.')
+    return 1
+  }
+  if (args.activate && !['noir-neko', 'noir-neko-ascii-fine'].includes(args.activate)) {
+    console.error('✗ --activate must be noir-neko or noir-neko-ascii-fine.')
+    return 1
+  }
+  if (args.advanced.length > 0) {
+    console.error('✗ The legacy source-patch installer is retired because it conflicts with Hermes updates.')
+    console.error('  For an old patched checkout, use scripts/migrate-to-plugin.mjs, then update Hermes and run this installer.')
+    return 1
+  }
+  if (!args.desktopPlugin && !args.pluginBackend && !args.pets) {
+    console.error('No install component is enabled. Select at least one plug-in or pet component.')
+    return 1
+  }
+
+  return withHomeTransactionLock(home, async () => {
+
+  const activeStamp = readStamp(home)
+  const activeLegacyTiers = ['statusbar', 'caduceus'].filter((tier) => activeStamp?.applied?.[tier])
+  if (args.desktopPlugin && activeLegacyTiers.length > 0) {
+    console.error(`Legacy source tiers are still active: ${activeLegacyTiers.join(', ')}.`)
+    console.error('The run-time desktop plug-in cannot coexist with those source changes.')
+    console.error(
+      `Run node scripts/migrate-to-plugin.mjs --home ${JSON.stringify(home)} ` +
+      `--repo ${JSON.stringify(join(home, 'hermes-agent'))} first.`,
+    )
+    return 1
   }
 
   // ---- plan ----
-  const steps = [`Pets: install both${args.activate ? `, activate "${args.activate}"` : ''}   [safe while Hermes runs]`]
-  if (args.advanced.length) steps.push(`Advanced: ${args.advanced.join(', ')} → stage + rebuild (npm run pack)   [Hermes must be quit]`)
-  if (args.theme === true) steps.push('Theme: node theme/apply-theme.mjs   [restarts Hermes once]')
+  const steps = []
+  if (args.desktopPlugin) steps.push('Desktop plug-in: theme + background + status items   [no source patch or rebuild]')
+  if (args.pluginBackend) steps.push('Telemetry backend: RAM + VRAM + session metadata   [full restart required]')
+  if (args.pets) steps.push(`Pets: install both${args.activate ? `, activate "${args.activate}"` : ''}   [safe while Hermes runs]`)
   console.log(`• HERMES_HOME: ${home}`)
-  if (args.advanced.length) {
-    console.log(`• hermes-agent: ${repo}`)
-    if (existsSync(join(repo, 'apps', 'desktop'))) {
-      const sel = selectBaseline({ repo })
-      console.log(`• baseline: ${sel.baseline ? `${sel.baseline.id} (via ${sel.matchType})` : 'none — reconcile (ai/repair.md)'}`)
-      const st = classifyState({ repo, home, base: sel.baseline?.commit ?? null, agentHead: currentHead(repo) })
-      console.log(`• current: ${Object.entries(st.tiers).map(([k, v]) => `${k}=${v}`).join(', ')}${st.onBase ? '' : '  (diverged from base)'}`)
-    }
-  }
   console.log(`▶ Plan (${steps.length} step${steps.length > 1 ? 's' : ''}):`)
   steps.forEach((s, i) => console.log(`  ${i + 1}. ${s}`))
   if (args.dryRun) {
@@ -187,16 +219,7 @@ async function main(argv) {
 
   // ---- confirm the auto-resolved home before the first write ----
   if (!args.home) {
-    const all = findHermesHomes()
-    if (all.length > 1) {
-      console.warn('! More than one Hermes install has a config.yaml:')
-      all.forEach((h, i) => console.warn(`    ${i === 0 ? '→' : ' '} ${h}`))
-      if (!args.yes) {
-        console.error('  Refusing to guess which one. Re-run with --home <path>, or --yes to accept → .')
-        return 1
-      }
-      console.warn(`  --yes: proceeding with ${home}`)
-    } else if (process.stdin.isTTY && !args.yes) {
+    if (process.stdin.isTTY && !args.yes) {
       if (!(await confirm(`Install to this Hermes? ${home}  [Y/n] `))) {
         console.log('Aborted. Pass --home <path> to target a different install.')
         return 1
@@ -204,45 +227,49 @@ async function main(argv) {
     }
   }
 
-  // ---- execute: pets → advanced (rebuild once) → theme ----
-  const pets = petsStep(home, args)
+  if (args.pets) {
+    recoverPendingPetConfig({
+      configPath: join(home, 'config.yaml'),
+      home,
+      version: PACK_VERSION,
+    })
+  }
+
+  // ---- execute: plug-in → pets → legacy advanced tiers → theme ----
+  if (args.desktopPlugin) {
+    const installed = installDesktopPlugin({
+      home,
+      source: join(HERE, 'desktop-plugin', 'classic-gold', 'plugin.js'),
+      version: PACK_VERSION
+    })
+    console.log(`• Installed update-safe desktop plug-in: ${installed.path}`)
+  }
+  if (args.pluginBackend) {
+    const backend = installPluginBackend({
+      home,
+      sourceRoot: join(HERE, 'backend', 'classic-gold'),
+      version: PACK_VERSION
+    })
+    console.log(`• Installed telemetry backend: ${backend.path}`)
+    console.log('  Fully restart Hermes Desktop once to load RAM, VRAM, and cost telemetry.')
+    console.log('  Hermes loads it automatically. If needed, use Command Palette → Reload desktop plugins.')
+  }
+
+  const pets = args.pets ? petsStep(home, args) : { activated: null, ok: true }
   if (!pets.ok) return 1
 
-  if (args.advanced.length) {
-    for (const t of args.advanced) {
-      console.log(`\n• Applying advanced tier: ${t}`)
-      const r = spawnSync('node', [TIER_SCRIPTS[t], '--repo', repo, '--no-build'], { stdio: 'inherit' })
-      if (r.status !== 0) {
-        console.error(`✗ Advanced tier "${t}" failed to stage. See ai/brokenupdatefix.md.`)
-        return 1
-      }
-    }
-    console.log('\n• Rebuilding once (npm run pack) — Hermes must be FULLY quit…')
-    const b = spawnSync('npm', ['run', 'pack'], { cwd: join(repo, 'apps', 'desktop'), stdio: 'inherit', shell: true })
-    if (b.status !== 0) {
-      console.error('✗ Rebuild failed (is Hermes quit? are apps/desktop deps installed?).')
-      return 1
-    }
-  }
-
-  if (args.theme === true) {
-    console.log('\n• Applying theme (restarts Hermes)…')
-    spawnSync('node', [join(HERE, 'theme', 'apply-theme.mjs')], { stdio: 'inherit' })
-  } else if (args.theme === undefined) {
-    printThemeInstructions()
-  }
-
   // ---- honest summary ----
-  const parts = [pets.activated ? `pets installed, "${pets.activated}" activated` : 'pets installed (none activated)']
-  if (args.advanced.length) parts.push(`advanced applied: ${args.advanced.join(', ')} (rebuilt)`)
-  if (args.theme === true) parts.push('theme applied')
+  const parts = []
+  if (args.desktopPlugin) parts.push('update-safe desktop plug-in installed')
+  if (args.pluginBackend) parts.push('telemetry backend installed')
+  if (args.pets) parts.push(pets.activated ? `pets installed, "${pets.activated}" activated` : 'pets installed (none activated)')
   console.log(`\n✓ ${parts.join('; ')}.`)
-  if (args.theme === undefined) console.log('  Theme is NOT applied yet →  node theme/apply-theme.mjs   (restarts Hermes once)')
-  if (!args.advanced.length) console.log('  Status bar / caduceus extras: node install.mjs --advanced statusbar,caduceus   (or see advanced/README.md)')
+  if (args.desktopPlugin) console.log('  Select "Classic Hermes" in Settings → Appearance if it is not active.')
 
   const receipt = formatReceipt(home)
   if (receipt) console.log('\n' + receipt)
   return 0
+  })
 }
 
 main(process.argv.slice(2)).then((code) => process.exit(code))

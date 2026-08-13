@@ -30,6 +30,37 @@ function fixture() {
   return { bundled, home, petsDir, root }
 }
 
+function seedLegacyPets({ bundled, home, petsDir, receiptDirectory = petsDir, stampedSlugs = ['noir-neko'] }) {
+  const slug = 'noir-neko'
+  const targetDirectory = join(petsDir, slug)
+  mkdirSync(targetDirectory, { recursive: true })
+  for (const name of ['pet.json', 'spritesheet.webp']) {
+    writeFileSync(join(targetDirectory, name), readFileSync(join(bundled, slug, name)))
+  }
+  writeFileSync(join(home, 'hermes-classic-gold-pack.json'), JSON.stringify({
+    pack: 'hermes-classic-gold-pack',
+    applied: { pets: { slugs: stampedSlugs } },
+  }, null, 2))
+  appendManifest(home, {
+    type: 'pet',
+    slug,
+    dir: join(receiptDirectory, slug),
+    preExisting: false,
+  })
+}
+
+function assertLegacyAdoptionRefused({ bundled, home, petsDir, expectedError }) {
+  const target = join(petsDir, 'noir-neko', 'pet.json')
+  const before = readFileSync(target, 'utf8')
+  const manifestCount = readManifest(home).entries.length
+  const stampBefore = readFileSync(join(home, 'hermes-classic-gold-pack.json'), 'utf8')
+
+  assert.throws(() => installPets(bundled, petsDir, { home }), expectedError)
+  assert.equal(readFileSync(target, 'utf8'), before)
+  assert.equal(readManifest(home).entries.length, manifestCount)
+  assert.equal(readFileSync(join(home, 'hermes-classic-gold-pack.json'), 'utf8'), stampBefore)
+}
+
 test('copies pet files with planned and completed ownership receipts', () => {
   const { bundled, home, petsDir } = fixture()
   mkdirSync(join(petsDir, '.thumbs'), { recursive: true })
@@ -79,6 +110,75 @@ test('uses a unique backup for a pre-existing pet file', () => {
   assert.notEqual(receipt.backup, `${target}.pre-classic-gold`)
   assert.equal(readFileSync(receipt.backup, 'utf8'), 'user pet')
   assert.equal(readFileSync(`${target}.pre-classic-gold`, 'utf8'), 'unrelated backup')
+})
+
+test('adopts an exact legacy pet receipt set', t => {
+  const { bundled, home, petsDir, root } = fixture()
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  seedLegacyPets({ bundled, home, petsDir })
+
+  const installed = installPets(bundled, petsDir, { home, version: '1.2.0' })
+
+  assert.equal(readStamp(home).applied.pets.transactionId, installed.transactionId)
+  assert.equal(readManifest(home).entries.filter(entry => {
+    return entry.type === 'pet-file' && entry.transactionId === installed.transactionId &&
+      entry.state === 'installed'
+  }).length, 2)
+})
+
+test('refuses a stale legacy pet receipt before it records ownership or writes a target', t => {
+  const { bundled, home, petsDir, root } = fixture()
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  seedLegacyPets({ bundled, home, petsDir })
+  appendManifest(home, {
+    type: 'pet',
+    slug: 'noir-neko',
+    dir: join(home, 'old-pets', 'noir-neko'),
+    preExisting: false,
+  })
+
+  assertLegacyAdoptionRefused({
+    bundled,
+    home,
+    petsDir,
+    expectedError: /does not match the selected pets directory/,
+  })
+})
+
+test('refuses a copied legacy pet receipt before it records ownership or writes a target', t => {
+  const { bundled, home, petsDir, root } = fixture()
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  seedLegacyPets({
+    bundled,
+    home,
+    petsDir,
+    receiptDirectory: join(root, 'copied-profile', 'pets'),
+  })
+
+  assertLegacyAdoptionRefused({
+    bundled,
+    home,
+    petsDir,
+    expectedError: /outside the selected root/,
+  })
+})
+
+test('refuses a legacy stamp that names a different pet set before it records ownership or writes a target', t => {
+  const { bundled, home, petsDir, root } = fixture()
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  seedLegacyPets({
+    bundled,
+    home,
+    petsDir,
+    stampedSlugs: ['noir-neko', 'noir-neko-ascii-fine'],
+  })
+
+  assertLegacyAdoptionRefused({
+    bundled,
+    home,
+    petsDir,
+    expectedError: /does not identify this installed pet set/,
+  })
 })
 
 test('rejects an active pet stamp with an incomplete receipt set', () => {

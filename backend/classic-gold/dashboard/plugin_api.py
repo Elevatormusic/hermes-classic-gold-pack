@@ -13,13 +13,11 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import psutil
 from fastapi import APIRouter, Query
-
 from hermes_state import SessionDB
-
 
 router = APIRouter()
 _MIB = 1024**2
@@ -72,17 +70,21 @@ def _vram() -> dict[str, Any]:
         "--query-gpu=index,name,memory.total,memory.used,memory.free",
         "--format=csv,noheader,nounits",
     ]
-    startup = None
+    startup: Any | None = None
     if os.name == "nt":
-        startup = subprocess.STARTUPINFO()
-        startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup_factory = getattr(subprocess, "STARTUPINFO", None)
+        if startup_factory is not None:
+            startup = startup_factory()
+            startup.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
 
     try:
         result = subprocess.run(
             command,
             capture_output=True,
             check=False,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+            creationflags=(
+                getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+            ),
             encoding="utf-8",
             errors="replace",
             shell=False,
@@ -90,13 +92,15 @@ def _vram() -> dict[str, Any]:
             timeout=2,
         )
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or f"nvidia-smi exited with {result.returncode}")
+            raise RuntimeError(
+                result.stderr.strip() or f"nvidia-smi exited with {result.returncode}"
+            )
 
         devices = []
         for row in csv.reader(io.StringIO(result.stdout)):
             if len(row) != 5:
                 raise ValueError("nvidia-smi returned an unexpected row")
-            index, name, total, used, free = (item.strip() for item in row)
+            index, name, total, used, free = [item.strip() for item in row]
             if any(item.upper() == "N/A" for item in (total, used, free)):
                 raise ValueError("nvidia-smi did not report memory values")
             total_bytes = int(float(total) * _MIB)
@@ -117,9 +121,9 @@ def _vram() -> dict[str, Any]:
         if not devices:
             raise ValueError("nvidia-smi returned no devices")
 
-        used_bytes = sum(device["used_bytes"] for device in devices)
-        free_bytes = sum(device["free_bytes"] for device in devices)
-        total_bytes = sum(device["total_bytes"] for device in devices)
+        used_bytes = sum(cast(int, device["used_bytes"]) for device in devices)
+        free_bytes = sum(cast(int, device["free_bytes"]) for device in devices)
+        total_bytes = sum(cast(int, device["total_bytes"]) for device in devices)
         return {
             "status": "ok",
             "source": "nvidia-smi",
@@ -222,14 +226,20 @@ def _session_metadata(row: dict[str, Any] | None, error: str | None) -> dict[str
         reasoning = model_config.get("reasoning_config") or {}
         if not isinstance(reasoning, dict):
             reasoning = {}
-        effort = "none" if reasoning.get("enabled") is False else str(reasoning.get("effort") or "")
+        effort = (
+            "none"
+            if reasoning.get("enabled") is False
+            else str(reasoning.get("effort") or "")
+        )
         service_tier = str(model_config.get("service_tier") or "")
         return {
             "status": "ok",
             "cwd": str(row.get("cwd") or ""),
             "git_branch": str(row.get("git_branch") or ""),
             "model": str(model_config.get("model") or row.get("model") or ""),
-            "provider": str(model_config.get("provider") or row.get("billing_provider") or ""),
+            "provider": str(
+                model_config.get("provider") or row.get("billing_provider") or ""
+            ),
             "reasoning_effort": effort,
             "fast": service_tier == "priority",
         }
@@ -238,7 +248,9 @@ def _session_metadata(row: dict[str, Any] | None, error: str | None) -> dict[str
 
 
 @router.get("/telemetry")
-def telemetry(session_id: str | None = Query(default=None, max_length=256)) -> dict[str, Any]:
+def telemetry(
+    session_id: str | None = Query(default=None, max_length=256)
+) -> dict[str, Any]:
     """Return resource readings, session display data, and reported cost."""
     row, error = _session_row(session_id)
     return {

@@ -1,4 +1,4 @@
-(function registerClassicGoldDashboard() {
+(function registerClassicGoldDashboard () {
   'use strict'
 
   const registry = window.__HERMES_PLUGINS__
@@ -6,7 +6,7 @@
     throw new Error('Hermes dashboard plug-in registry is not available.')
   }
 
-  function ClassicGoldDashboard() {
+  function ClassicGoldDashboard () {
     return null
   }
 

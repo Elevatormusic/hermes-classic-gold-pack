@@ -33,4 +33,4 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install 'fastapi>=0.110,<1' 'psutil>=5.9,<8'
-      - run: python -m unittest -v test.test_plugin_api
+      - run: python -m unittest discover -v -s test -p 'test_plugin_api.py'

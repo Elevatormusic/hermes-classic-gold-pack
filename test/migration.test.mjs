@@ -223,8 +223,14 @@ test('migration refuses to guess between auto-detected Hermes homes', t => {
   t.after(() => removeFixture(fixture))
 
   const preferred = join(fixture, 'preferred')
+  const profile = join(fixture, 'profile')
   const localAppData = join(fixture, 'local-app-data')
-  const second = join(localAppData, 'hermes')
+  const xdgData = join(fixture, 'xdg-data')
+  const second = process.platform === 'win32'
+    ? join(localAppData, 'hermes')
+    : process.platform === 'darwin'
+      ? join(profile, 'Library', 'Application Support', 'hermes')
+      : join(xdgData, 'hermes')
   mkdirSync(preferred, { recursive: true })
   mkdirSync(second, { recursive: true })
   writeFileSync(join(preferred, 'config.yaml'), 'display: {}\n')
@@ -238,8 +244,10 @@ test('migration refuses to guess between auto-detected Hermes homes', t => {
       env: {
         ...process.env,
         HERMES_HOME: preferred,
+        HOME: profile,
         LOCALAPPDATA: localAppData,
-        USERPROFILE: join(fixture, 'profile'),
+        USERPROFILE: profile,
+        XDG_DATA_HOME: xdgData,
       },
     },
   )

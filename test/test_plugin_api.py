@@ -16,7 +16,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_API = ROOT / "backend" / "classic-gold" / "dashboard" / "plugin_api.py"
 
@@ -80,8 +79,7 @@ class PluginApiTests(unittest.TestCase):
         completed = SimpleNamespace(
             returncode=0,
             stdout=(
-                "0, RTX 3090, 24576, 6144, 18432\n"
-                "1, RTX A4000, 12288, 3072, 9216\n"
+                "0, RTX 3090, 24576, 6144, 18432\n" "1, RTX A4000, 12288, 3072, 9216\n"
             ),
             stderr="",
         )
@@ -366,7 +364,9 @@ class PluginApiTests(unittest.TestCase):
         with patch.object(self.api, "SessionDB", database_class):
             result = self.api._session_row(session_id)
 
-        self.assertEqual(result, ({"model": "example-model", "model_config": "{}"}, None))
+        self.assertEqual(
+            result, ({"model": "example-model", "model_config": "{}"}, None)
+        )
         database_class.assert_called_once_with(read_only=True)
         query, parameters = database._conn.execute.call_args.args
         normalized_query = " ".join(query.split()).lower()
@@ -400,14 +400,20 @@ class PluginApiTests(unittest.TestCase):
 
         with (
             patch.object(self.api, "_hardware_resources", return_value=resources),
-            patch.object(self.api, "_session_row", return_value=(row, None)) as read_session,
+            patch.object(
+                self.api, "_session_row", return_value=(row, None)
+            ) as read_session,
             patch.object(self.api, "_cost", return_value=cost) as read_cost,
-            patch.object(self.api, "_session_metadata", return_value=session) as read_metadata,
+            patch.object(
+                self.api, "_session_metadata", return_value=session
+            ) as read_metadata,
             patch.object(self.api.time, "time", return_value=12.345),
         ):
             result = self.api.telemetry("session-1")
 
-        routes = [route for route in self.api.router.routes if route.path == "/telemetry"]
+        routes = [
+            route for route in self.api.router.routes if route.path == "/telemetry"
+        ]
         self.assertEqual(len(routes), 1)
         self.assertFalse(inspect.iscoroutinefunction(routes[0].endpoint))
         self.assertEqual(

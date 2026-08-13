@@ -1,3 +1,5 @@
+/* global localStorage, MutationObserver */
+
 /**
  * Classic Gold runtime plug-in for Hermes Desktop.
  *
@@ -105,7 +107,7 @@ const PRESET_OPTIONS = [
 const settingsAtom = atom(DEFAULT_SETTINGS)
 const settingsReturnRouteAtom = atom('/')
 
-function syncComposerModelTargets(scope = document) {
+function syncComposerModelTargets (scope = document) {
   const current = new Set(scope.querySelectorAll(COMPOSER_MODEL_PATH))
   scope.querySelectorAll('[data-classic-gold-composer-model]').forEach(button => {
     if (!current.has(button)) delete button.dataset.classicGoldComposerModel
@@ -116,7 +118,7 @@ function syncComposerModelTargets(scope = document) {
   return current.size
 }
 
-function openClassicGoldSettings() {
+function openClassicGoldSettings () {
   const current = window.location.hash.startsWith('#/') ? window.location.hash.slice(1) : '/'
   if (current !== '/classic-gold') settingsReturnRouteAtom.set(current || '/')
   host.navigate('/classic-gold')
@@ -217,7 +219,7 @@ const boundedNumber = (value, fallback = 0) => {
   return Number.isFinite(number) ? number : fallback
 }
 
-function mergeUsageMonotonic(current = {}, incoming = {}) {
+function mergeUsageMonotonic (current = {}, incoming = {}) {
   const merged = { ...current, ...incoming }
   for (const key of ['calls', 'input', 'output', 'total']) {
     merged[key] = Math.max(boundedNumber(current[key]), boundedNumber(incoming[key]))
@@ -225,14 +227,14 @@ function mergeUsageMonotonic(current = {}, incoming = {}) {
   return merged
 }
 
-function completedTurnSpeed({ baselineReady, completedAt, outputAtStart, startedAt, usage }) {
+function completedTurnSpeed ({ baselineReady, completedAt, outputAtStart, startedAt, usage }) {
   if (!baselineReady || !startedAt || completedAt <= startedAt) return null
   const outputDelta = Math.max(0, boundedNumber(usage?.output) - boundedNumber(outputAtStart))
   if (outputDelta <= 0) return null
   return outputDelta / Math.max(0.001, (completedAt - startedAt) / 1000)
 }
 
-function shouldHideComposerModel(settings) {
+function shouldHideComposerModel (settings) {
   return Boolean(settings.visuals.hideComposerModel && settings.show.model)
 }
 
@@ -240,7 +242,7 @@ const clampedNumber = (value, minimum, maximum, fallback) => (
   Math.max(minimum, Math.min(maximum, boundedNumber(value, fallback)))
 )
 
-function sanitizeSettings(value) {
+function sanitizeSettings (value) {
   const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
   const rawShow = raw.show && typeof raw.show === 'object' && !Array.isArray(raw.show) ? raw.show : {}
   const rawVisuals = raw.visuals && typeof raw.visuals === 'object' && !Array.isArray(raw.visuals) ? raw.visuals : {}
@@ -269,36 +271,36 @@ function sanitizeSettings(value) {
   }
 }
 
-function pathLeaf(value) {
+function pathLeaf (value) {
   const parts = String(value || '').split(/[\\/]+/).filter(Boolean)
   return parts.at(-1) || 'workspace'
 }
 
-function compactNumber(value) {
+function compactNumber (value) {
   const number = Math.max(0, boundedNumber(value))
   if (number >= 1_000_000) return `${(number / 1_000_000).toFixed(number >= 10_000_000 ? 0 : 1)}M`
   if (number >= 1_000) return `${(number / 1_000).toFixed(number >= 10_000 ? 0 : 1)}K`
   return String(Math.round(number))
 }
 
-function contextPercent(usage) {
+function contextPercent (usage) {
   const maximum = boundedNumber(usage.context_max)
   if (maximum > 0) return Math.max(0, Math.min(100, (boundedNumber(usage.context_used) / maximum) * 100))
   return Math.max(0, Math.min(100, boundedNumber(usage.context_percent)))
 }
 
-function contextLabel(usage) {
+function contextLabel (usage) {
   const maximum = boundedNumber(usage.context_max)
   if (maximum > 0) return `${compactNumber(usage.context_used)}/${compactNumber(maximum)}`
   return `${compactNumber(usage.total)}tok`
 }
 
-function contextMeter(percent, width = 8) {
+function contextMeter (percent, width = 8) {
   const filled = Math.round((Math.max(0, Math.min(100, percent)) / 100) * width)
   return `${'█'.repeat(filled)}${'░'.repeat(width - filled)}`
 }
 
-function effortCode(value, fast = false) {
+function effortCode (value, fast = false) {
   if (fast) return 'F'
   const effort = String(value || '').trim().toLowerCase()
   if (effort.startsWith('max') || effort.startsWith('xhigh')) return 'X'
@@ -310,7 +312,7 @@ function effortCode(value, fast = false) {
   return '-'
 }
 
-function providerView(value) {
+function providerView (value) {
   const provider = String(value || '').trim()
   const local = /custom|local|ollama|lm[ -]?studio|llama\.cpp|vllm|dgx/i.test(provider)
   const label = /lm[ -]?studio/i.test(provider)
@@ -329,30 +331,30 @@ function providerView(value) {
   return { label, symbol: local ? '⌂' : '☁' }
 }
 
-function formatSpeed(speed) {
+function formatSpeed (speed) {
   if (!Number.isFinite(speed) || speed <= 0) return '--/s'
   return speed >= 10 ? `${speed.toFixed(0)}/s` : `${speed.toFixed(1)}/s`
 }
 
-function formatCost(cost) {
+function formatCost (cost) {
   if (cost?.status === 'included') return '0.00'
   if (cost?.status !== 'actual' || !Number.isFinite(cost.actual_cost_usd)) return '--'
   const amount = Math.max(0, cost.actual_cost_usd)
   return amount > 0 && amount < 0.01 ? amount.toFixed(4) : amount.toFixed(2)
 }
 
-function formatBytes(value, decimals = 1) {
+function formatBytes (value, decimals = 1) {
   const bytes = boundedNumber(value, -1)
   if (bytes < 0) return '--'
   return (bytes / 1024 ** 3).toFixed(decimals)
 }
 
-function formatMemory(resource) {
+function formatMemory (resource) {
   if (resource?.status !== 'ok' || boundedNumber(resource.total_bytes) <= 0) return '--/--G'
   return `${formatBytes(resource.used_bytes)}/${formatBytes(resource.total_bytes, 0)}G`
 }
 
-function ContextDetails({ sessionId }) {
+function ContextDetails ({ sessionId }) {
   const [state, setState] = useState({ data: null, loading: Boolean(sessionId) })
 
   useEffect(() => {
@@ -362,7 +364,7 @@ function ContextDetails({ sessionId }) {
     }
     let live = true
     setState({ data: null, loading: true })
-    void host.request('session.context_breakdown', { session_id: sessionId })
+    host.request('session.context_breakdown', { session_id: sessionId })
       .then(data => {
         if (live) setState({ data, loading: false })
       })
@@ -401,7 +403,7 @@ function ContextDetails({ sessionId }) {
   })
 }
 
-function writeSession(sessionId, key, value, fallback, extra = {}) {
+function writeSession (sessionId, key, value, fallback, extra = {}) {
   if (!sessionId) {
     host.notify({
       kind: 'warning',
@@ -418,7 +420,7 @@ function writeSession(sessionId, key, value, fallback, extra = {}) {
     })
 }
 
-function TapeModelPicker({ gateway, profile, runtime, sessionId, setRuntime }) {
+function TapeModelPicker ({ gateway, profile, runtime, sessionId, setRuntime }) {
   const [open, setOpen] = useState(false)
   const [confirmation, setConfirmation] = useState(null)
   const [search, setSearch] = useState('')
@@ -471,71 +473,71 @@ function TapeModelPicker({ gateway, profile, runtime, sessionId, setRuntime }) {
       },
       open,
       children: [
-      jsx(DropdownMenuTrigger, {
-        asChild: true,
-        children: jsxs('button', {
-          'aria-label': 'Switch model',
-          className: 'classic-gold-action classic-gold-model',
-          'data-classic-gold-control': 'model',
-          disabled: !sessionId,
-          title: runtime.busy
-            ? 'Browse models; choices unlock when the current turn ends'
-            : sessionId
-              ? 'Switch model'
-              : 'Use the composer model selector for a new draft',
-          type: 'button',
-          children: [jsx('i', { children: '⚕' }), runtime.model || 'model', jsx('small', { children: '⌄' })]
+        jsx(DropdownMenuTrigger, {
+          asChild: true,
+          children: jsxs('button', {
+            'aria-label': 'Switch model',
+            className: 'classic-gold-action classic-gold-model',
+            'data-classic-gold-control': 'model',
+            disabled: !sessionId,
+            title: runtime.busy
+              ? 'Browse models; choices unlock when the current turn ends'
+              : sessionId
+                ? 'Switch model'
+                : 'Use the composer model selector for a new draft',
+            type: 'button',
+            children: [jsx('i', { children: '⚕' }), runtime.model || 'model', jsx('small', { children: '⌄' })]
+          })
+        }),
+        jsxs(DropdownMenuContent, {
+          align: 'start',
+          side: 'top',
+          sideOffset: 10,
+          style: { padding: 0, width: '20rem' },
+          children: [
+            jsx('div', {
+              style: { padding: '0.5rem' },
+              children: jsx(Input, {
+                autoFocus: true,
+                onChange: event => setSearch(event.target.value),
+                onKeyDown: event => {
+                  if (event.key !== 'Escape') event.stopPropagation()
+                },
+                placeholder: 'Search models',
+                value: search
+              })
+            }),
+            jsx(DropdownMenuSeparator, {}),
+            runtime.busy
+              ? jsx(DropdownMenuItem, { disabled: true, children: 'Model choices unlock when the current turn ends' })
+              : null,
+            models.isPending
+              ? jsx(DropdownMenuItem, { disabled: true, children: 'Loading models…' })
+              : models.error
+                ? jsx(DropdownMenuItem, { disabled: true, children: 'Could not load models' })
+                : groups.length === 0
+                  ? jsx(DropdownMenuItem, { disabled: true, children: 'No models found' })
+                  : jsx('div', {
+                    style: { maxHeight: '18rem', overflowY: 'auto' },
+                    children: groups.flatMap(provider => [
+                      jsx(DropdownMenuItem, {
+                        disabled: true,
+                        className: 'font-semibold',
+                        children: provider.name || provider.slug
+                      }, `heading:${provider.slug}`),
+                      ...provider.models.map(row => {
+                        const model = typeof row === 'string' ? row : row.id || row.name
+                        const selected = provider.slug === runtime.provider && model === runtime.model
+                        return jsx(DropdownMenuItem, {
+                          disabled: runtime.busy,
+                          onSelect: () => select(model, provider.slug),
+                          children: `${selected ? '✓ ' : ''}${model}`
+                        }, `${provider.slug}:${model}`)
+                      })
+                    ])
+                  })
+          ]
         })
-      }),
-      jsxs(DropdownMenuContent, {
-        align: 'start',
-        side: 'top',
-        sideOffset: 10,
-        style: { padding: 0, width: '20rem' },
-        children: [
-          jsx('div', {
-            style: { padding: '0.5rem' },
-            children: jsx(Input, {
-              autoFocus: true,
-              onChange: event => setSearch(event.target.value),
-              onKeyDown: event => {
-                if (event.key !== 'Escape') event.stopPropagation()
-              },
-              placeholder: 'Search models',
-              value: search
-            })
-          }),
-          jsx(DropdownMenuSeparator, {}),
-          runtime.busy
-            ? jsx(DropdownMenuItem, { disabled: true, children: 'Model choices unlock when the current turn ends' })
-            : null,
-          models.isPending
-            ? jsx(DropdownMenuItem, { disabled: true, children: 'Loading models…' })
-            : models.error
-              ? jsx(DropdownMenuItem, { disabled: true, children: 'Could not load models' })
-              : groups.length === 0
-                ? jsx(DropdownMenuItem, { disabled: true, children: 'No models found' })
-                : jsx('div', {
-                  style: { maxHeight: '18rem', overflowY: 'auto' },
-                  children: groups.flatMap(provider => [
-                    jsx(DropdownMenuItem, {
-                      disabled: true,
-                      className: 'font-semibold',
-                      children: provider.name || provider.slug
-                    }, `heading:${provider.slug}`),
-                    ...provider.models.map(row => {
-                      const model = typeof row === 'string' ? row : row.id || row.name
-                      const selected = provider.slug === runtime.provider && model === runtime.model
-                      return jsx(DropdownMenuItem, {
-                        disabled: runtime.busy,
-                        onSelect: () => void select(model, provider.slug),
-                        children: `${selected ? '✓ ' : ''}${model}`
-                      }, `${provider.slug}:${model}`)
-                    })
-                  ])
-                })
-        ]
-      })
       ]
     }), jsx(ConfirmDialog, {
       confirmLabel: 'Use model',
@@ -560,14 +562,14 @@ function TapeModelPicker({ gateway, profile, runtime, sessionId, setRuntime }) {
   })
 }
 
-function formatDuration(startedAt, now) {
+function formatDuration (startedAt, now) {
   if (!startedAt) return '--'
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
   const minutes = Math.floor(seconds / 60)
   return `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 }
 
-function SettingsSwitch({ checked, label, onChange }) {
+function SettingsSwitch ({ checked, label, onChange }) {
   return jsxs('div', {
     className: 'classic-gold-settings-switch',
     children: [
@@ -577,7 +579,7 @@ function SettingsSwitch({ checked, label, onChange }) {
   })
 }
 
-function SettingsRange({ label, maximum, minimum, onChange, suffix = '%', value }) {
+function SettingsRange ({ label, maximum, minimum, onChange, suffix = '%', value }) {
   return jsxs('label', {
     className: 'classic-gold-settings-range',
     children: [
@@ -594,7 +596,7 @@ function SettingsRange({ label, maximum, minimum, onChange, suffix = '%', value 
   })
 }
 
-function ClassicGoldSettings({ fullPage = false, onChange, onOpenFullPage = openClassicGoldSettings, settings }) {
+function ClassicGoldSettings ({ fullPage = false, onChange, onOpenFullPage = openClassicGoldSettings, settings }) {
   const setShow = (key, checked) => onChange({ ...settings, show: { ...settings.show, [key]: checked } })
   const setVisual = (key, value) => onChange({ ...settings, visuals: { ...settings.visuals, [key]: value } })
 
@@ -729,13 +731,13 @@ function ClassicGoldSettings({ fullPage = false, onChange, onOpenFullPage = open
   })
 }
 
-function saveSettings(storage, value) {
+function saveSettings (storage, value) {
   const next = sanitizeSettings(value)
   settingsAtom.set(next)
   storage?.set(SETTINGS_KEY, next)
 }
 
-function ClassicGoldSettingsPage({ storage }) {
+function ClassicGoldSettingsPage ({ storage }) {
   const returnRoute = useValue(settingsReturnRouteAtom)
   const settings = useValue(settingsAtom)
 
@@ -774,7 +776,7 @@ function ClassicGoldSettingsPage({ storage }) {
   })
 }
 
-function SettingsTrigger({ onChange, settings }) {
+function SettingsTrigger ({ onChange, settings }) {
   const [open, setOpen] = useState(false)
   const openFullPage = () => {
     setOpen(false)
@@ -807,7 +809,7 @@ function SettingsTrigger({ onChange, settings }) {
   })
 }
 
-function TelemetryTape({ rest, storage }) {
+function TelemetryTape ({ rest, storage }) {
   const activeSessionId = useValue(host.state.activeSessionId)
   const gateway = useValue(host.state.gateway)
   const hostCwd = useValue(host.state.cwd)
@@ -891,7 +893,7 @@ function TelemetryTape({ rest, storage }) {
     if (gateway !== 'open') return
     let live = true
     const session = activeSessionId ? { session_id: activeSessionId } : {}
-    void Promise.allSettled([
+    Promise.allSettled([
       activeSessionId
         ? Promise.resolve(null)
         : host.request('model.options', { explicit_only: true }),
@@ -972,7 +974,7 @@ function TelemetryTape({ rest, storage }) {
         const snapshot = runtimeRef.current
         const completedAt = Date.now()
         const generation = ++completionGeneration
-        void host.request('session.usage', { session_id: activeSessionId }).then(latest => {
+        host.request('session.usage', { session_id: activeSessionId }).then(latest => {
           if (!live || generation !== completionGeneration) return
           setRuntime(current => {
             const usage = mergeUsageMonotonic(current.usage, latest)
@@ -1049,8 +1051,8 @@ function TelemetryTape({ rest, storage }) {
         refreshing = false
       }
     }
-    void refresh()
-    const timer = window.setInterval(() => void refresh(), 3000)
+    refresh()
+    const timer = window.setInterval(() => refresh(), 3000)
     return () => {
       cancelled = true
       window.clearInterval(timer)
@@ -1091,8 +1093,8 @@ function TelemetryTape({ rest, storage }) {
         }
       }
     }
-    void refresh()
-    const timer = window.setInterval(() => void refresh(), 5000)
+    refresh()
+    const timer = window.setInterval(() => refresh(), 5000)
     return () => {
       cancelled = true
       window.clearInterval(timer)
@@ -1152,12 +1154,12 @@ function TelemetryTape({ rest, storage }) {
       children: [
         jsx(DropdownMenuTrigger, {
           asChild: true,
-                  children: jsxs('button', {
-                    'aria-label': 'Change reasoning effort',
-                    className: 'classic-gold-action',
-                    'data-classic-gold-control': 'reasoning',
-                    disabled: !activeSessionId,
-                    title: activeSessionId ? 'Change reasoning effort' : 'Start a session before changing reasoning',
+          children: jsxs('button', {
+            'aria-label': 'Change reasoning effort',
+            className: 'classic-gold-action',
+            'data-classic-gold-control': 'reasoning',
+            disabled: !activeSessionId,
+            title: activeSessionId ? 'Change reasoning effort' : 'Start a session before changing reasoning',
             type: 'button',
             children: [jsx('i', { children: '◆' }), effortCode(runtime.effort, runtime.fast)]
           })
@@ -1170,7 +1172,7 @@ function TelemetryTape({ rest, storage }) {
           children: REASONING_EFFORT_VALUES.map(value => jsx(DropdownMenuItem, {
             onSelect: event => {
               event.preventDefault()
-              void patchReasoning(value)
+              patchReasoning(value)
             },
             children: jsxs('span', {
               className: 'flex w-full items-center justify-between',
@@ -1305,7 +1307,7 @@ function TelemetryTape({ rest, storage }) {
   })
 }
 
-function createCaduceus() {
+function createCaduceus () {
   const layer = document.createElement('div')
   layer.setAttribute('data-classic-gold-caduceus', '')
   layer.setAttribute('aria-hidden', 'true')
@@ -1320,7 +1322,7 @@ function createCaduceus() {
   return layer
 }
 
-function canonicalJson(value) {
+function canonicalJson (value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
   if (value && typeof value === 'object') {
     return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`
@@ -1332,7 +1334,7 @@ function canonicalJson(value) {
 // mirror so Classic Gold is available during the first paint. Replace only the
 // exact legacy Pack theme or the last mirror that this plug-in wrote. If the
 // user changes the mirror, preserve the user's copy.
-function syncBootThemeMirror() {
+function syncBootThemeMirror () {
   try {
     const record = JSON.parse(localStorage.getItem(USER_THEMES_KEY) || '{}')
     if (!record || Array.isArray(record) || typeof record !== 'object') return false
@@ -1374,7 +1376,7 @@ function syncBootThemeMirror() {
   }
 }
 
-function installVisualLayer(ctx) {
+function installVisualLayer (ctx) {
   document.getElementById(STYLE_ID)?.remove()
   document.querySelectorAll('[data-classic-gold-caduceus]').forEach(node => node.remove())
 
@@ -1642,7 +1644,6 @@ function installVisualLayer(ctx) {
       }
       layer.hidden = !enabled
     })
-
   }
 
   const root = document.documentElement
@@ -1704,7 +1705,7 @@ export default {
   name: 'Classic Gold',
   description: 'The original gold theme, pixel caduceus, and telemetry tape',
   defaultEnabled: true,
-  register(ctx) {
+  register (ctx) {
     const bootMirrorChanged = syncBootThemeMirror()
     settingsAtom.set(sanitizeSettings(ctx.storage.get(SETTINGS_KEY, DEFAULT_SETTINGS)))
     ctx.registerMany([

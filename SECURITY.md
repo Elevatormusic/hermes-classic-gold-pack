@@ -71,6 +71,7 @@ The backend route accepts one optional session identifier, limited to 256
 characters. It opens the Hermes session database in read-only mode. It returns:
 
 - provider-reported cost status and actual cost, when present;
+- prompt-cache token counts and a cache hit rate, when Hermes records them;
 - working directory and git branch;
 - model and provider;
 - reasoning effort and priority mode;
@@ -89,6 +90,11 @@ Cost is shown only when Hermes records `actual` or `included`. Missing,
 estimated, unknown, and unreadable values stay unknown. The renderer computes a
 completed-turn token average from public events. It does not claim live decoder
 throughput.
+
+The cache hit rate uses prompt-cache read tokens divided by input tokens plus
+prompt-cache read and write tokens. The backend returns it only when the session
+has a positive read count and denominator. It does not expose prompt or message
+text.
 
 For a remote Hermes profile, install the backend files and config entry under
 the remote backend host's `HERMES_HOME` with

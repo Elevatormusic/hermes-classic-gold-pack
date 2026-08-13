@@ -92,8 +92,9 @@ Use the repository screenshot as the visual reference. On the first start:
    settings and the context breakdown.
 6. Confirm that an active session hides the duplicate composer model selector.
    Confirm that a new draft keeps the selector.
-7. Complete one turn. Check the token values, final-turn rate, session cost,
-   RAM, and VRAM. An unknown value can be correct; see the telemetry rules below.
+7. Complete one turn. Check the token values, prompt-cache hit rate, final-turn
+   rate, session cost, RAM, and VRAM. An unknown value can be correct; see the
+   telemetry rules below.
 8. Capture a second screenshot with the tape and one open control. If a check
    fails, include both screenshots in the issue report.
 
@@ -106,6 +107,9 @@ The tape does not invent missing values.
 - Cost is the actual provider-reported session cost when Hermes records
   `actual`. It is `0.00` when Hermes records an included subscription route. It
   is `--` for an unknown, estimated, missing, or unreadable cost.
+- Cache hit rate is prompt-cache read tokens divided by input tokens plus
+  prompt-cache read and write tokens. It is `--` until Hermes records a
+  prompt-cache read and a positive denominator. It does not estimate cache use.
 - RAM is the total used and total memory of the backend host. It is not the
   Hermes process memory.
 - VRAM is the sum of used and total memory for all NVIDIA GPUs that
@@ -227,9 +231,10 @@ Click **HERMES-AGENT** on the tape to open the quick customizer. You can also
 run **Customize Classic Gold** from the Command Palette. The full page remains
 available when the window is narrow or when the Hermes status bar is hidden.
 
-You can show or hide activity, model, reasoning, provider, context, tokens,
-speed, cost, time, RAM and VRAM, profile, gateway state, live-session count,
-and workspace. You can also select Original, Dim, or Contrast; change
+You can show or hide activity, prompt-cache hit rate, model, reasoning,
+provider, context, tokens, speed, cost, time, RAM and VRAM, profile, gateway
+state, live-session count, and workspace. You can also select Original, Dim,
+or Contrast; change
 density and size; hide the caduceus or wordmark; and control the duplicate
 composer model selector.
 

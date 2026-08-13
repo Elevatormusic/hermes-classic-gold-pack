@@ -50,6 +50,7 @@ const DEFAULT_SETTINGS = {
   preset: 'original',
   show: {
     activity: true,
+    cache: false,
     context: true,
     cost: true,
     gateway: false,
@@ -78,6 +79,7 @@ const DEFAULT_SETTINGS = {
 
 const SETTINGS_FIELDS = [
   ['activity', 'Run state'],
+  ['cache', 'Cache hit rate'],
   ['model', 'Model'],
   ['reasoning', 'Reasoning'],
   ['provider', 'Provider'],
@@ -341,6 +343,12 @@ function formatCost (cost) {
   if (cost?.status !== 'actual' || !Number.isFinite(cost.actual_cost_usd)) return '--'
   const amount = Math.max(0, cost.actual_cost_usd)
   return amount > 0 && amount < 0.01 ? amount.toFixed(4) : amount.toFixed(2)
+}
+
+function formatCacheHitRate (cache) {
+  const hitRate = boundedNumber(cache?.hit_rate, -1)
+  if (cache?.status !== 'ok' || hitRate < 0 || hitRate > 1) return '--'
+  return `${Math.round(hitRate * 100)}%`
 }
 
 function formatBytes (value, decimals = 1) {
@@ -839,6 +847,7 @@ function TelemetryTape ({ rest, storage }) {
   const runtimeRef = useRef(runtime)
   const [now, setNow] = useState(() => Date.now())
   const [resources, setResources] = useState(null)
+  const [cache, setCache] = useState(null)
   const [cost, setCost] = useState(null)
 
   useEffect(() => {
@@ -870,6 +879,7 @@ function TelemetryTape ({ rest, storage }) {
       usageSeeded: false
     })
     setResources(null)
+    setCache(null)
     setCost(null)
   }, [activeSessionId])
 
@@ -1070,6 +1080,7 @@ function TelemetryTape ({ rest, storage }) {
         )
         if (!cancelled) {
           setResources(telemetry?.resources || null)
+          setCache(telemetry?.cache || null)
           setCost(telemetry?.cost || null)
           if (telemetry?.session?.status === 'ok') {
             setRuntime(current => current.metadataSeeded
@@ -1089,6 +1100,7 @@ function TelemetryTape ({ rest, storage }) {
       } catch {
         if (!cancelled) {
           setResources(null)
+          setCache(null)
           setCost(null)
         }
       }
@@ -1225,6 +1237,18 @@ function TelemetryTape ({ rest, storage }) {
     sections.push(['tokens', jsxs('span', {
       title: 'Input and output tokens in this session',
       children: [jsx('i', { children: '↓' }), compactNumber(runtime.usage.input), jsx('i', { children: '↑' }), compactNumber(runtime.usage.output)]
+    })])
+  }
+
+  if (settings.show.cache) {
+    const cacheRate = formatCacheHitRate(cache)
+    sections.push(['cache', jsxs('span', {
+      'aria-label': `Prompt cache hit rate ${cacheRate}`,
+      role: 'status',
+      title: cache?.status === 'ok'
+        ? `Cached prompt tokens: ${compactNumber(cache.cache_read_tokens)}. Eligible prompt tokens: ${compactNumber(cache.denominator_tokens)}.`
+        : (cache?.reason || 'Prompt-cache data is unavailable for this session'),
+      children: [jsx('i', { children: '↻' }), cacheRate]
     })])
   }
 
@@ -1622,6 +1646,9 @@ function installVisualLayer (ctx) {
     }
     @media (max-width: 1179px) {
       [data-classic-gold-telemetry] [data-classic-gold-section="hardware"] { display: none; }
+    }
+    @media (max-width: 1099px) {
+      [data-classic-gold-telemetry] [data-classic-gold-section="cache"] { display: none; }
     }
     @media (max-width: 999px) {
       [data-classic-gold-telemetry] [data-classic-gold-section="performance"] { display: none; }

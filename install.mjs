@@ -9,17 +9,29 @@ import { resolveHermesHome, findHermesHomes } from './lib/hermes-home.mjs'
 import { preflight, reportPreflight } from './lib/preflight.mjs'
 import { formatReceipt, readStamp, recordApplied, withHomeTransactionLock } from './lib/pack-stamp.mjs'
 import { installPets } from './lib/pets.mjs'
-import { installDesktopPlugin } from './lib/desktop-plugin.mjs'
+import {
+  compensateDesktopPlugin,
+  finalizeDesktopPlugin,
+  installDesktopPlugin
+} from './lib/desktop-plugin.mjs'
 import { installPetConfig, recoverPendingPetConfig } from './lib/pet-config.mjs'
 import { installPluginBackend } from './lib/plugin-backend.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PACK_VERSION = JSON.parse(readFileSync(join(HERE, 'package.json'), 'utf8')).version
-function parseArgs(argv) {
+function parseArgs (argv) {
   const args = {
-    home: undefined, repo: undefined, activate: undefined,
-    advanced: [], desktopPlugin: true, pluginBackend: undefined, pets: true,
-    yes: false, dryRun: false, help: false, unsupported: [],
+    home: undefined,
+    repo: undefined,
+    activate: undefined,
+    advanced: [],
+    desktopPlugin: true,
+    pluginBackend: undefined,
+    pets: true,
+    yes: false,
+    dryRun: false,
+    help: false,
+    unsupported: []
   }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -75,7 +87,7 @@ Usage: node install.mjs [--home <path>] [--activate <slug>]
 Installs the Classic Gold desktop plug-in and the two Noir Neko pets. The
 desktop plug-in is the recommended path. It survives normal Hermes updates.`
 
-function confirm(question) {
+function confirm (question) {
   return new Promise((resolve) => {
     const rl = createInterface({ input: process.stdin, output: process.stdout })
     rl.question(question, (a) => {
@@ -86,7 +98,7 @@ function confirm(question) {
 }
 
 /** Install + optionally activate the pets, recording stamp + manifest. */
-function petsStep(home, args) {
+function petsStep (home, args) {
   const bundled = join(HERE, 'pets')
   const petsDir = join(home, 'pets')
   const installed = installPets(bundled, petsDir, { home, version: PACK_VERSION })
@@ -113,12 +125,12 @@ function petsStep(home, args) {
         configPath: cfgPath,
         home,
         slug: args.activate,
-        version: PACK_VERSION,
+        version: PACK_VERSION
       })
       recordApplied(home, 'pets', {
         ...petsStamp,
         activated: args.activate,
-        previousSlug,
+        previousSlug
       }, { version: PACK_VERSION })
       activated = args.activate
       console.log(`• Activated pet "${args.activate}" in config.yaml (targeted receipt recorded)`)
@@ -138,7 +150,7 @@ function petsStep(home, args) {
   return { ok: activationOk, slugs, activated }
 }
 
-async function main(argv) {
+async function main (argv) {
   const args = parseArgs(argv)
   if (args.help) {
     console.log(HELP)
@@ -191,84 +203,107 @@ async function main(argv) {
   }
 
   return withHomeTransactionLock(home, async () => {
-
-  const activeStamp = readStamp(home)
-  const activeLegacyTiers = ['statusbar', 'caduceus'].filter((tier) => activeStamp?.applied?.[tier])
-  if (args.desktopPlugin && activeLegacyTiers.length > 0) {
-    console.error(`Legacy source tiers are still active: ${activeLegacyTiers.join(', ')}.`)
-    console.error('The run-time desktop plug-in cannot coexist with those source changes.')
-    console.error(
+    const activeStamp = readStamp(home)
+    const activeLegacyTiers = ['statusbar', 'caduceus'].filter((tier) => activeStamp?.applied?.[tier])
+    if (args.desktopPlugin && activeLegacyTiers.length > 0) {
+      console.error(`Legacy source tiers are still active: ${activeLegacyTiers.join(', ')}.`)
+      console.error('The run-time desktop plug-in cannot coexist with those source changes.')
+      console.error(
       `Run node scripts/migrate-to-plugin.mjs --home ${JSON.stringify(home)} ` +
-      `--repo ${JSON.stringify(join(home, 'hermes-agent'))} first.`,
-    )
-    return 1
-  }
+      `--repo ${JSON.stringify(join(home, 'hermes-agent'))} first.`
+      )
+      return 1
+    }
 
-  // ---- plan ----
-  const steps = []
-  if (args.desktopPlugin) steps.push('Desktop plug-in: theme + background + status items   [no source patch or rebuild]')
-  if (args.pluginBackend) steps.push('Telemetry backend: RAM + VRAM + session metadata   [full restart required]')
-  if (args.pets) steps.push(`Pets: install both${args.activate ? `, activate "${args.activate}"` : ''}   [safe while Hermes runs]`)
-  console.log(`• HERMES_HOME: ${home}`)
-  console.log(`▶ Plan (${steps.length} step${steps.length > 1 ? 's' : ''}):`)
-  steps.forEach((s, i) => console.log(`  ${i + 1}. ${s}`))
-  if (args.dryRun) {
-    console.log('\n(--dry-run: nothing changed.)')
-    return 0
-  }
+    // ---- plan ----
+    const steps = []
+    if (args.desktopPlugin) steps.push('Desktop plug-in: theme + background + status items   [no source patch or rebuild]')
+    if (args.pluginBackend) steps.push('Telemetry backend: RAM + VRAM + session metadata   [full restart required]')
+    if (args.pets) steps.push(`Pets: install both${args.activate ? `, activate "${args.activate}"` : ''}   [safe while Hermes runs]`)
+    console.log(`• HERMES_HOME: ${home}`)
+    console.log(`▶ Plan (${steps.length} step${steps.length > 1 ? 's' : ''}):`)
+    steps.forEach((s, i) => console.log(`  ${i + 1}. ${s}`))
+    if (args.dryRun) {
+      console.log('\n(--dry-run: nothing changed.)')
+      return 0
+    }
 
-  // ---- confirm the auto-resolved home before the first write ----
-  if (!args.home) {
-    if (process.stdin.isTTY && !args.yes) {
-      if (!(await confirm(`Install to this Hermes? ${home}  [Y/n] `))) {
-        console.log('Aborted. Pass --home <path> to target a different install.')
-        return 1
+    // ---- confirm the auto-resolved home before the first write ----
+    if (!args.home) {
+      if (process.stdin.isTTY && !args.yes) {
+        if (!(await confirm(`Install to this Hermes? ${home}  [Y/n] `))) {
+          console.log('Aborted. Pass --home <path> to target a different install.')
+          return 1
+        }
       }
     }
-  }
 
-  if (args.pets) {
-    recoverPendingPetConfig({
-      configPath: join(home, 'config.yaml'),
-      home,
-      version: PACK_VERSION,
-    })
-  }
+    if (args.pets) {
+      recoverPendingPetConfig({
+        configPath: join(home, 'config.yaml'),
+        home,
+        version: PACK_VERSION
+      })
+    }
 
-  // ---- execute: plug-in → pets → legacy advanced tiers → theme ----
-  if (args.desktopPlugin) {
-    const installed = installDesktopPlugin({
-      home,
-      source: join(HERE, 'desktop-plugin', 'classic-gold', 'plugin.js'),
-      version: PACK_VERSION
-    })
-    console.log(`• Installed update-safe desktop plug-in: ${installed.path}`)
-  }
-  if (args.pluginBackend) {
-    const backend = installPluginBackend({
-      home,
-      sourceRoot: join(HERE, 'backend', 'classic-gold'),
-      version: PACK_VERSION
-    })
-    console.log(`• Installed telemetry backend: ${backend.path}`)
-    console.log('  Fully restart Hermes Desktop once to load RAM, VRAM, and cost telemetry.')
-    console.log('  Hermes loads it automatically. If needed, use Command Palette → Reload desktop plugins.')
-  }
+    // ---- execute: plug-in → pets → legacy advanced tiers → theme ----
+    const previousDesktopPlugin = activeStamp?.applied?.desktopPlugin || null
+    let desktopPlugin = null
+    if (args.desktopPlugin) {
+      const installed = installDesktopPlugin({
+        home,
+        retainRollbackBackup: args.pluginBackend,
+        source: join(HERE, 'desktop-plugin', 'classic-gold', 'plugin.js'),
+        version: PACK_VERSION
+      })
+      desktopPlugin = installed
+      console.log(`• Installed update-safe desktop plug-in: ${installed.path}`)
+    }
+    if (args.pluginBackend) {
+      try {
+        const backend = installPluginBackend({
+          home,
+          sourceRoot: join(HERE, 'backend', 'classic-gold'),
+          version: PACK_VERSION
+        })
+        console.log(`• Installed telemetry backend: ${backend.path}`)
+        console.log('  Fully restart Hermes Desktop once to load RAM, VRAM, and cost telemetry.')
+        console.log('  Hermes loads it automatically. If needed, use Command Palette → Reload desktop plugins.')
+      } catch (backendError) {
+        if (!desktopPlugin) throw backendError
+        try {
+          compensateDesktopPlugin({
+            home,
+            previousApplied: previousDesktopPlugin,
+            transactionId: desktopPlugin.transactionId
+          })
+        } catch (compensationError) {
+          throw new AggregateError(
+            [backendError, compensationError],
+            'Telemetry backend install failed and the desktop plug-in compensation failed.'
+          )
+        }
+        throw backendError
+      }
+      if (desktopPlugin) {
+        finalizeDesktopPlugin({ home, transactionId: desktopPlugin.transactionId })
+      }
+    }
 
-  const pets = args.pets ? petsStep(home, args) : { activated: null, ok: true }
-  if (!pets.ok) return 1
+    const pets = args.pets ? petsStep(home, args) : { activated: null, ok: true }
+    if (!pets.ok) return 1
 
-  // ---- honest summary ----
-  const parts = []
-  if (args.desktopPlugin) parts.push('update-safe desktop plug-in installed')
-  if (args.pluginBackend) parts.push('telemetry backend installed')
-  if (args.pets) parts.push(pets.activated ? `pets installed, "${pets.activated}" activated` : 'pets installed (none activated)')
-  console.log(`\n✓ ${parts.join('; ')}.`)
-  if (args.desktopPlugin) console.log('  Select "Classic Hermes" in Settings → Appearance if it is not active.')
+    // ---- honest summary ----
+    const parts = []
+    if (args.desktopPlugin) parts.push('update-safe desktop plug-in installed')
+    if (args.pluginBackend) parts.push('telemetry backend installed')
+    if (args.pets) parts.push(pets.activated ? `pets installed, "${pets.activated}" activated` : 'pets installed (none activated)')
+    console.log(`\n✓ ${parts.join('; ')}.`)
+    if (args.desktopPlugin) console.log('  Select "Classic Hermes" in Settings → Appearance if it is not active.')
 
-  const receipt = formatReceipt(home)
-  if (receipt) console.log('\n' + receipt)
-  return 0
+    const receipt = formatReceipt(home)
+    if (receipt) console.log('\n' + receipt)
+    return 0
   })
 }
 

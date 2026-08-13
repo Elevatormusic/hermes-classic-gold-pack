@@ -1,3 +1,5 @@
+/* eslint-disable no-new-func */
+
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,11 +10,12 @@ import test from 'node:test'
 
 import {
   buildDesktopPluginSource,
+  compensateDesktopPlugin,
   desktopPluginPath,
   installDesktopPlugin,
   legacyDesktopPluginReceipt,
   removeVerifiedCreatedBackup,
-  WORDMARK_TOKEN,
+  WORDMARK_TOKEN
 } from '../lib/desktop-plugin.mjs'
 import { fileSha256, sha256 } from '../lib/file-integrity.mjs'
 import {
@@ -20,43 +23,51 @@ import {
   readManifest,
   readStamp,
   stampPath,
-  withHomeTransactionLock,
+  withHomeTransactionLock
 } from '../lib/pack-stamp.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGIN_SOURCE = join(ROOT, 'desktop-plugin', 'classic-gold', 'plugin.js')
 
-function loadUsageMerger(source) {
+function loadUsageMerger (source) {
   const bounded = source.match(/const boundedNumber = \(value, fallback = 0\) => \{[\s\S]*?\n\}/)?.[0]
-  const merger = source.match(/function mergeUsageMonotonic\(current = \{\}, incoming = \{\}\) \{[\s\S]*?\n\}/)?.[0]
+  const merger = source.match(/function mergeUsageMonotonic ?\(current = \{\}, incoming = \{\}\) \{[\s\S]*?\n\}/)?.[0]
   assert.ok(bounded, 'boundedNumber helper is present')
   assert.ok(merger, 'mergeUsageMonotonic helper is present')
   return Function(`${bounded}\n${merger}\nreturn mergeUsageMonotonic`)()
 }
 
-function loadComposerMarker(source) {
+function loadComposerMarker (source) {
   const selector = source.match(/const COMPOSER_MODEL_PATH = ([^\n]+)/)?.[0]
-  const marker = source.match(/function syncComposerModelTargets\(scope = document\) \{[\s\S]*?\n\}/)?.[0]
+  const marker = source.match(/function syncComposerModelTargets ?\(scope = document\) \{[\s\S]*?\n\}/)?.[0]
   assert.ok(selector, 'composer model path is present')
   assert.ok(marker, 'composer model marker is present')
   return Function(`${selector}\n${marker}\nreturn { COMPOSER_MODEL_PATH, syncComposerModelTargets }`)()
 }
 
-function loadTurnSpeed(source) {
+function loadTurnSpeed (source) {
   const bounded = source.match(/const boundedNumber = \(value, fallback = 0\) => \{[\s\S]*?\n\}/)?.[0]
-  const speed = source.match(/function completedTurnSpeed\(\{ baselineReady, completedAt, outputAtStart, startedAt, usage \}\) \{[\s\S]*?\n\}/)?.[0]
+  const speed = source.match(/function completedTurnSpeed ?\(\{ baselineReady, completedAt, outputAtStart, startedAt, usage \}\) \{[\s\S]*?\n\}/)?.[0]
   assert.ok(bounded, 'boundedNumber helper is present')
   assert.ok(speed, 'completedTurnSpeed helper is present')
   return Function(`${bounded}\n${speed}\nreturn completedTurnSpeed`)()
 }
 
-function loadHideDecision(source) {
-  const helper = source.match(/function shouldHideComposerModel\(settings\) \{[\s\S]*?\n\}/)?.[0]
+function loadCacheHitRate (source) {
+  const bounded = source.match(/const boundedNumber = \(value, fallback = 0\) => \{[\s\S]*?\n\}/)?.[0]
+  const formatter = source.match(/function formatCacheHitRate ?\(cache\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(bounded, 'boundedNumber helper is present')
+  assert.ok(formatter, 'formatCacheHitRate helper is present')
+  return Function(`${bounded}\n${formatter}\nreturn formatCacheHitRate`)()
+}
+
+function loadHideDecision (source) {
+  const helper = source.match(/function shouldHideComposerModel ?\(settings\) \{[\s\S]*?\n\}/)?.[0]
   assert.ok(helper, 'composer hide decision is present')
   return Function(`${helper}\nreturn shouldHideComposerModel`)()
 }
 
-function temporaryHome() {
+function temporaryHome () {
   return mkdtempSync(join(tmpdir(), 'classic-gold-plugin-'))
 }
 
@@ -111,7 +122,7 @@ test('a stale usage poll cannot reduce completed cumulative token counts', () =>
   assert.deepEqual(mergeUsageMonotonic(afterCompletion, stalePoll), afterCompletion)
   assert.deepEqual(
     mergeUsageMonotonic(afterCompletion, { calls: 5, input: 13_000, output: 2_800, total: 15_800 }),
-    { calls: 5, input: 13_000, output: 2_800, total: 15_800 },
+    { calls: 5, input: 13_000, output: 2_800, total: 15_800 }
   )
 })
 
@@ -122,21 +133,28 @@ test('completed token rate uses a seeded current-turn delta only', () => {
   assert.equal(speed({ baselineReady: true, completedAt: 2_000, outputAtStart: 900, startedAt: 1_000, usage: { output: 1_000 } }), 100)
 })
 
+test('cache hit rate has a safe display value', () => {
+  const formatCacheHitRate = loadCacheHitRate(readFileSync(PLUGIN_SOURCE, 'utf8'))
+  assert.equal(formatCacheHitRate({ status: 'ok', hit_rate: 500 / 650 }), '77%')
+  assert.equal(formatCacheHitRate({ status: 'unavailable' }), '--')
+  assert.equal(formatCacheHitRate({ status: 'ok', hit_rate: 2 }), '--')
+})
+
 test('composer model marking survives repeated settings changes without localized labels', () => {
   const { COMPOSER_MODEL_PATH, syncComposerModelTargets } = loadComposerMarker(
-    readFileSync(PLUGIN_SOURCE, 'utf8'),
+    readFileSync(PLUGIN_SOURCE, 'utf8')
   )
   const first = { dataset: {} }
   const replacement = { dataset: {} }
   let active = first
   const scope = {
-    querySelectorAll(selector) {
+    querySelectorAll (selector) {
       if (selector === COMPOSER_MODEL_PATH) return [active]
       if (selector === '[data-classic-gold-composer-model]') {
         return [first, replacement].filter(button => 'classicGoldComposerModel' in button.dataset)
       }
       return []
-    },
+    }
   }
 
   assert.equal(syncComposerModelTargets(scope), 1)
@@ -226,7 +244,7 @@ test('installDesktopPlugin rejects a changed actively managed file', t => {
 
   assert.throws(
     () => installDesktopPlugin({ home, source: PLUGIN_SOURCE }),
-    /changed after this pack wrote it/,
+    /changed after this pack wrote it/
   )
   assert.equal(readFileSync(first.path, 'utf8'), 'user changed the managed file\n')
   assert.equal(readManifest(home).entries.length, receiptCount)
@@ -244,7 +262,7 @@ test('installDesktopPlugin rejects a changed active original backup', t => {
 
   assert.throws(
     () => installDesktopPlugin({ home, source: PLUGIN_SOURCE }),
-    /backup changed or is missing/,
+    /backup changed or is missing/
   )
   assert.equal(readManifest(home).entries.length, receiptCount)
 })
@@ -269,7 +287,7 @@ test('installDesktopPlugin retries exact active cleanup before reinstall', t => 
 
   assert.throws(
     () => installDesktopPlugin({ home, source: PLUGIN_SOURCE, version: '1.2.1' }),
-    /active rollback backup hash verification failed/,
+    /active rollback backup hash verification failed/
   )
   assert.equal(readManifest(home).entries.length, receiptCount)
   assert.equal(readStamp(home).applied.desktopPlugin.transactionId, activeStamp.transactionId)
@@ -318,15 +336,15 @@ test('legacy renderer receipts are adopted only with exact Pack ownership proof'
       id: 'classic-gold',
       path: target,
       backup: null,
-      preExisting: false,
-    }],
+      preExisting: false
+    }]
   }
   const adopted = legacyDesktopPluginReceipt({
     componentStamp,
     currentHash,
     manifest,
     target,
-    legacyHashes: new Set([currentHash]),
+    legacyHashes: new Set([currentHash])
   })
 
   assert.equal(adopted.installedHash, currentHash)
@@ -337,14 +355,14 @@ test('legacy renderer receipts are adopted only with exact Pack ownership proof'
     currentHash: 'user-modified',
     manifest,
     target,
-    legacyHashes: new Set([currentHash]),
+    legacyHashes: new Set([currentHash])
   }), null)
   assert.equal(legacyDesktopPluginReceipt({
     componentStamp,
     currentHash,
     manifest: { entries: [{ ...manifest.entries[0], state: 'installed' }] },
     target,
-    legacyHashes: new Set([currentHash]),
+    legacyHashes: new Set([currentHash])
   }), null)
 })
 
@@ -360,6 +378,52 @@ test('installDesktopPlugin records and cleans a failed new-file transaction', t 
   assert.equal(existsSync(planned.temporary), false)
   if (planned.rollbackBackup) assert.equal(existsSync(planned.rollbackBackup), false)
   for (const directory of planned.createdDirectories) assert.equal(existsSync(directory), false)
+})
+
+test('compensateDesktopPlugin resumes an interrupted fresh cleanup once', t => {
+  const home = temporaryHome()
+  const target = desktopPluginPath(home)
+  t.after(() => rmSync(home, { recursive: true, force: true }))
+
+  const installed = installDesktopPlugin({
+    home,
+    retainRollbackBackup: true,
+    source: PLUGIN_SOURCE
+  })
+  const receipt = readManifest(home).entries.find(entry => (
+    entry.type === 'desktop-plugin' && entry.transactionId === installed.transactionId &&
+    entry.state === 'installed'
+  ))
+  unlinkSync(target)
+  appendManifest(home, {
+    type: 'desktop-plugin-compensation',
+    path: target,
+    desktopTransactionId: installed.transactionId,
+    installedHash: receipt.installedHash,
+    previousApplied: null,
+    previousHash: null,
+    rollbackBackup: null,
+    state: 'planned',
+    temporary: `${target}.classic-gold-compensate-interrupted`,
+    transactionId: 'interrupted-compensation'
+  })
+
+  assert.equal(compensateDesktopPlugin({
+    home,
+    previousApplied: null,
+    transactionId: installed.transactionId
+  }), true)
+  assert.equal(compensateDesktopPlugin({
+    home,
+    previousApplied: null,
+    transactionId: installed.transactionId
+  }), false)
+  assert.equal(existsSync(target), false)
+  assert.equal(readStamp(home)?.applied?.desktopPlugin, undefined)
+  const states = readManifest(home).entries
+    .filter(entry => entry.type === 'desktop-plugin-compensation')
+    .map(entry => entry.state)
+  assert.deepEqual(states, ['planned', 'rolled-back'])
 })
 
 test('installDesktopPlugin rolls back its unique backup and keeps unrelated files', t => {
@@ -400,12 +464,12 @@ test('installDesktopPlugin refuses a concurrent profile transaction', t => {
       '} catch (error) {',
       '  process.stderr.write(String(error.message))',
       '  process.exit(23)',
-      '}',
+      '}'
     ].join('\n')
     const child = spawnSync(
       process.execPath,
       ['--input-type=module', '-e', childSource, home, source],
-      { encoding: 'utf8' },
+      { encoding: 'utf8' }
     )
 
     assert.equal(child.status, 23, child.stderr)
@@ -439,7 +503,7 @@ test('installDesktopPlugin recovers an abrupt first install before retry', t => 
     rollbackBackup: null,
     state: 'planned',
     temporary: `${target}.classic-gold-next-abrupt`,
-    transactionId,
+    transactionId
   })
 
   installDesktopPlugin({ home, source: PLUGIN_SOURCE })
@@ -479,7 +543,7 @@ test('installDesktopPlugin restores an abrupt reinstall before retry', t => {
     rollbackBackup,
     state: 'planned',
     temporary: `${target}.classic-gold-next-reinstall`,
-    transactionId,
+    transactionId
   })
 
   installDesktopPlugin({ home, source: PLUGIN_SOURCE })
@@ -503,7 +567,7 @@ test('a changed Pack-created original backup is not deleted', t => {
 
   assert.throws(
     () => removeVerifiedCreatedBackup(backup, expectedHash),
-    /original backup hash verification failed/,
+    /original backup hash verification failed/
   )
   assert.equal(readFileSync(backup, 'utf8'), 'changed after the planned receipt\n')
 })

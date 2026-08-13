@@ -42,10 +42,12 @@ not patch or rebuild the Hermes checkout.
 10. In an active session, test the model, reasoning, provider, and context
     controls. Confirm that the duplicate composer selector is hidden. Open a
     new draft and confirm that the selector returns.
-11. Complete one turn. Confirm the token display and final-turn average. Check
-    cost, RAM, and VRAM without treating `--` as a false value. Cost stays
-    unknown unless Hermes records an actual or included cost. RAM and VRAM are
-    host-wide backend readings, not per-process or per-session readings.
+11. Complete one turn. Confirm the token display, prompt-cache hit rate, and
+    final-turn average. Check cost, RAM, and VRAM without treating `--` as a
+    false value. Cache hit rate stays unavailable until Hermes records a
+    prompt-cache read. Cost stays unknown unless Hermes records an actual or
+    included cost. RAM and VRAM are host-wide backend readings, not per-process
+    or per-session readings.
 12. Report the exact `HERMES_HOME`, renderer path, backend path, restart method,
     and results. Keep the initial screenshot and one screenshot with an open
     control for issue evidence.

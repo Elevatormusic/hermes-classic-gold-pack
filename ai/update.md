@@ -81,8 +81,9 @@ update stash, or copy an old baseline over current Hermes files.
 5. Test the model, reasoning, provider, and context controls.
 6. Confirm that the active session hides the duplicate composer model selector
    and that a new draft keeps it.
-7. Complete one turn and check the final-turn rate and session cost. `--` is the
-   correct cost when Hermes did not record an actual or included value.
+7. Complete one turn and check the prompt-cache hit rate, final-turn rate, and
+   session cost. `--` is the correct cache rate without prompt-cache reads and
+   the correct cost when Hermes did not record an actual or included value.
 8. Check RAM and VRAM. They cover the complete backend host. For a remote
    profile, confirm that the remote backend was also installed and restarted.
 

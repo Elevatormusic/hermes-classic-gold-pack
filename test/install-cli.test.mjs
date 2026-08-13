@@ -6,24 +6,24 @@ import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 
-import { appendManifest, recordApplied } from '../lib/pack-stamp.mjs'
+import { appendManifest, readManifest, readStamp, recordApplied } from '../lib/pack-stamp.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const INSTALL = join(ROOT, 'install.mjs')
 const UNINSTALL = join(ROOT, 'scripts', 'uninstall.mjs')
 
-function homeFixture(t) {
+function homeFixture (t) {
   const home = mkdtempSync(join(tmpdir(), 'classic-gold-install-'))
   t.after(() => rmSync(home, { recursive: true, force: true }))
   writeFileSync(join(home, 'config.yaml'), 'plugins:\n  enabled: []\n  disabled: []\n')
   return home
 }
 
-function run(home, args) {
+function run (home, args) {
   return spawnSync(process.execPath, [INSTALL, '--home', home, ...args], { encoding: 'utf8' })
 }
 
-function runRaw(args, env = process.env) {
+function runRaw (args, env = process.env) {
   return spawnSync(process.execPath, [INSTALL, ...args], { encoding: 'utf8', env })
 }
 
@@ -43,7 +43,7 @@ test('remote backend mode skips the renderer and pets', t => {
     '--no-desktop-plugin',
     '--plugin-backend',
     '--no-pets',
-    '--dry-run',
+    '--dry-run'
   ])
 
   assert.equal(result.status, 0, result.stderr || result.stdout)
@@ -66,19 +66,19 @@ test('an empty install plan stops without profile writes', t => {
     rollbackTemporary: null,
     temporary: null,
     state: 'planned',
-    transactionId: 'pending-pet-config-empty-plan',
+    transactionId: 'pending-pet-config-empty-plan'
   })
   appendManifest(home, {
     type: 'pet-config-transaction',
     path: configPath,
     state: 'planned',
-    transactionId: 'pending-pet-config-empty-plan',
+    transactionId: 'pending-pet-config-empty-plan'
   })
   const manifestBefore = readFileSync(join(home, 'hermes-classic-gold-pack.manifest.json'))
   const result = run(home, [
     '--no-desktop-plugin',
     '--no-plugin-backend',
-    '--no-pets',
+    '--no-pets'
   ])
 
   assert.equal(result.status, 1)
@@ -101,13 +101,13 @@ test('--no-pets does not recover a pending pet config transaction', t => {
     rollbackTemporary: null,
     temporary: null,
     state: 'planned',
-    transactionId: 'pending-pet-config-no-pets',
+    transactionId: 'pending-pet-config-no-pets'
   })
   appendManifest(home, {
     type: 'pet-config-transaction',
     path: configPath,
     state: 'planned',
-    transactionId: 'pending-pet-config-no-pets',
+    transactionId: 'pending-pet-config-no-pets'
   })
   const manifestBefore = readFileSync(join(home, 'hermes-classic-gold-pack.manifest.json'))
 
@@ -115,13 +115,13 @@ test('--no-pets does not recover a pending pet config transaction', t => {
     '--no-desktop-plugin',
     '--plugin-backend',
     '--no-pets',
-    '--yes',
+    '--yes'
   ])
 
   assert.equal(result.status, 0, result.stderr || result.stdout)
   const entries = JSON.parse(readFileSync(
     join(home, 'hermes-classic-gold-pack.manifest.json'),
-    'utf8',
+    'utf8'
   )).entries
   assert.deepEqual(entries.slice(0, 2), JSON.parse(manifestBefore).entries)
   assert.equal(entries.some(entry => entry.transactionId === 'pending-pet-config-no-pets' && entry.state === 'rolled-back'), false)
@@ -178,6 +178,85 @@ test('an unknown option stops before any profile write', t => {
   assert.equal(existsSync(join(home, 'hermes-classic-gold-pack.json')), false)
 })
 
+test('a fresh renderer and backend install completes its finalization', t => {
+  const home = homeFixture(t)
+  const target = join(home, 'desktop-plugins', 'classic-gold', 'plugin.js')
+
+  const result = run(home, ['--no-pets'])
+
+  assert.equal(result.status, 0, result.stderr || result.stdout)
+  assert.equal(existsSync(target), true)
+  const applied = readStamp(home).applied.desktopPlugin
+  const finalization = readManifest(home).entries.filter(entry => (
+    entry.type === 'desktop-plugin-finalization' &&
+    entry.desktopTransactionId === applied.transactionId
+  ))
+  assert.deepEqual(finalization.map(entry => entry.state), ['planned', 'committed'])
+})
+
+test('a fresh renderer install is removed when backend configuration fails', t => {
+  const home = homeFixture(t)
+  const target = join(home, 'desktop-plugins', 'classic-gold', 'plugin.js')
+  writeFileSync(join(home, 'config.yaml'), 'plugins: []\n')
+
+  const result = run(home, [])
+
+  assert.notEqual(result.status, 0)
+  assert.equal(existsSync(target), false)
+  assert.equal(readStamp(home)?.applied?.desktopPlugin, undefined)
+  const compensation = readManifest(home).entries.filter(entry => (
+    entry.type === 'desktop-plugin-compensation'
+  ))
+  assert.deepEqual(compensation.map(entry => entry.state), ['planned', 'rolled-back'])
+  assert.equal(existsSync(compensation[0].temporary), false)
+  assert.equal(existsSync(join(home, 'desktop-plugins', 'classic-gold')), false)
+})
+
+test('an updated renderer is restored when backend configuration fails', t => {
+  const home = homeFixture(t)
+  const target = join(home, 'desktop-plugins', 'classic-gold', 'plugin.js')
+  const first = run(home, ['--no-plugin-backend', '--no-pets'])
+  assert.equal(first.status, 0, first.stderr || first.stdout)
+  const previousBytes = readFileSync(target)
+  const previousApplied = readStamp(home).applied.desktopPlugin
+  writeFileSync(join(home, 'config.yaml'), 'plugins: []\n')
+
+  const result = run(home, [])
+
+  assert.notEqual(result.status, 0)
+  assert.deepEqual(readFileSync(target), previousBytes)
+  assert.deepEqual(readStamp(home).applied.desktopPlugin, previousApplied)
+  const compensation = readManifest(home).entries.filter(entry => (
+    entry.type === 'desktop-plugin-compensation'
+  ))
+  assert.deepEqual(compensation.map(entry => entry.state), ['planned', 'rolled-back'])
+  assert.equal(existsSync(compensation[0].rollbackBackup), false)
+})
+
+test('a successful renderer and backend update finalizes its rollback backup', t => {
+  const home = homeFixture(t)
+  const first = run(home, ['--no-plugin-backend', '--no-pets'])
+  assert.equal(first.status, 0, first.stderr || first.stdout)
+
+  const result = run(home, ['--no-pets'])
+
+  assert.equal(result.status, 0, result.stderr || result.stdout)
+  const applied = readStamp(home).applied.desktopPlugin
+  const entries = readManifest(home).entries
+  const renderer = entries.find(entry => (
+    entry.type === 'desktop-plugin' &&
+    entry.transactionId === applied.transactionId &&
+    entry.state === 'installed'
+  ))
+  const finalization = entries.filter(entry => (
+    entry.type === 'desktop-plugin-finalization' &&
+    entry.desktopTransactionId === applied.transactionId
+  ))
+  assert.ok(renderer.rollbackBackup)
+  assert.equal(existsSync(renderer.rollbackBackup), false)
+  assert.deepEqual(finalization.map(entry => entry.state), ['planned', 'committed'])
+})
+
 test('reinstall keeps the first pet config state and uninstall restores only that block', t => {
   const home = homeFixture(t)
   const original = [
@@ -189,7 +268,7 @@ test('reinstall keeps the first pet config state and uninstall restores only tha
     'plugins:',
     '  enabled: []',
     '  disabled: []',
-    '',
+    ''
   ].join('\n')
   writeFileSync(join(home, 'config.yaml'), original)
 
@@ -197,7 +276,7 @@ test('reinstall keeps the first pet config state and uninstall restores only tha
     '--no-desktop-plugin',
     '--no-plugin-backend',
     '--activate',
-    'noir-neko',
+    'noir-neko'
   ])
   assert.equal(first.status, 0, first.stderr || first.stdout)
 
@@ -210,7 +289,7 @@ test('reinstall keeps the first pet config state and uninstall restores only tha
     '--no-desktop-plugin',
     '--no-plugin-backend',
     '--activate',
-    'noir-neko-ascii-fine',
+    'noir-neko-ascii-fine'
   ])
   assert.equal(second.status, 0, second.stderr || second.stdout)
 
@@ -219,7 +298,7 @@ test('reinstall keeps the first pet config state and uninstall restores only tha
     '--home',
     home,
     '--no-build',
-    '--yes',
+    '--yes'
   ], { encoding: 'utf8' })
   assert.equal(removed.status, 0, removed.stderr || removed.stdout)
   const restored = readFileSync(join(home, 'config.yaml'), 'utf8')

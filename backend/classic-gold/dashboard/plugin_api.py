@@ -168,7 +168,8 @@ def _session_row(session_id: str | None) -> tuple[dict[str, Any] | None, str | N
             cursor = database._conn.execute(  # noqa: SLF001 - narrow read avoids prompt data
                 """
                 SELECT cwd, git_branch, model, billing_provider, model_config,
-                       actual_cost_usd, cost_status, cost_source
+                       actual_cost_usd, cost_status, cost_source, input_tokens,
+                       cache_read_tokens, cache_write_tokens
                 FROM sessions
                 WHERE id = ?
                 """,
@@ -207,6 +208,39 @@ def _cost(row: dict[str, Any] | None, error: str | None) -> dict[str, Any]:
         }
     except Exception as exc:
         return {"status": "unknown", "actual_cost_usd": None, "reason": str(exc)}
+
+
+def _token_count(value: Any) -> int:
+    if isinstance(value, bool):
+        raise ValueError("token count must be a nonnegative integer")
+    number = float(value)
+    if not math.isfinite(number) or number < 0 or not number.is_integer():
+        raise ValueError("token count must be a nonnegative integer")
+    return int(number)
+
+
+def _cache_hit_rate(row: dict[str, Any] | None, error: str | None) -> dict[str, Any]:
+    if error:
+        return {"status": "unavailable", "reason": error}
+    if not row:
+        return {"status": "unavailable"}
+    try:
+        input_tokens = _token_count(row.get("input_tokens"))
+        cache_read_tokens = _token_count(row.get("cache_read_tokens"))
+        cache_write_tokens = _token_count(row.get("cache_write_tokens"))
+    except (TypeError, ValueError, OverflowError) as exc:
+        return {"status": "unavailable", "reason": str(exc)}
+    denominator_tokens = input_tokens + cache_read_tokens + cache_write_tokens
+    if cache_read_tokens <= 0 or denominator_tokens <= 0:
+        return {"status": "unavailable"}
+    return {
+        "status": "ok",
+        "input_tokens": input_tokens,
+        "cache_read_tokens": cache_read_tokens,
+        "cache_write_tokens": cache_write_tokens,
+        "denominator_tokens": denominator_tokens,
+        "hit_rate": cache_read_tokens / denominator_tokens,
+    }
 
 
 def _session_metadata(row: dict[str, Any] | None, error: str | None) -> dict[str, Any]:
@@ -258,5 +292,6 @@ def telemetry(
         "sampled_at_unix_ms": int(time.time() * 1000),
         "resources": _hardware_resources(),
         "cost": _cost(row, error),
+        "cache": _cache_hit_rate(row, error),
         "session": _session_metadata(row, error),
     }

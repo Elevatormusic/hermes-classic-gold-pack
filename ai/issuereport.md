@@ -30,9 +30,9 @@ Hermes source checkout for a renderer, backend, theme, settings, or pet problem.
    Test an interaction and capture a screenshot before and after the failure.
 
 Do not report `--` as a false value without checking the telemetry contract.
-Speed needs a completed turn. Cost needs an actual or included Hermes cost
-record. RAM and VRAM cover the full backend host. VRAM also needs NVIDIA
-`nvidia-smi`.
+Speed needs a completed turn. Cache hit rate needs prompt-cache reads. Cost
+needs an actual or included Hermes cost record. RAM and VRAM cover the full
+backend host. VRAM also needs NVIDIA `nvidia-smi`.
 
 If diagnostics show a legacy source patch, stop the normal recovery. Use
 [`brokenupdatefix.md`](brokenupdatefix.md). Use [`repair.md`](repair.md) only

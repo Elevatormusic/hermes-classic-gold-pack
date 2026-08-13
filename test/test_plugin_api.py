@@ -260,6 +260,36 @@ class PluginApiTests(unittest.TestCase):
             {"status": "unknown", "actual_cost_usd": None},
         )
 
+    def test_cache_hit_rate_uses_the_canonical_denominator(self):
+        row = {
+            "input_tokens": 100,
+            "cache_read_tokens": 500,
+            "cache_write_tokens": 50,
+        }
+        result = self.api._cache_hit_rate(row, None)
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["denominator_tokens"], 650)
+        self.assertEqual(result["hit_rate"], 500 / 650)
+
+    def test_cache_hit_rate_is_unavailable_without_reads(self):
+        row = {
+            "input_tokens": 100,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 50,
+        }
+        self.assertEqual(self.api._cache_hit_rate(row, None), {"status": "unavailable"})
+
+    def test_cache_hit_rate_rejects_invalid_token_counters(self):
+        for value in (-1, 1.5, float("nan"), True, None):
+            row = {
+                "input_tokens": 100,
+                "cache_read_tokens": value,
+                "cache_write_tokens": 50,
+            }
+            self.assertEqual(
+                self.api._cache_hit_rate(row, None)["status"], "unavailable"
+            )
+
     def test_session_metadata_reports_all_display_fields(self):
         row = {
             "cwd": "C:/work/example",
@@ -395,6 +425,7 @@ class PluginApiTests(unittest.TestCase):
             "vram": {"status": "unavailable", "source": "nvidia-smi", "devices": []},
         }
         cost = {"status": "actual", "actual_cost_usd": 1.25}
+        cache = {"status": "ok", "hit_rate": 0.5}
         session = {"status": "ok", "model": "example"}
         row = {"id": "session-1"}
 
@@ -404,6 +435,7 @@ class PluginApiTests(unittest.TestCase):
                 self.api, "_session_row", return_value=(row, None)
             ) as read_session,
             patch.object(self.api, "_cost", return_value=cost) as read_cost,
+            patch.object(self.api, "_cache_hit_rate", return_value=cache) as read_cache,
             patch.object(
                 self.api, "_session_metadata", return_value=session
             ) as read_metadata,
@@ -423,11 +455,13 @@ class PluginApiTests(unittest.TestCase):
                 "sampled_at_unix_ms": 12345,
                 "resources": resources,
                 "cost": cost,
+                "cache": cache,
                 "session": session,
             },
         )
         read_session.assert_called_once_with("session-1")
         read_cost.assert_called_once_with(row, None)
+        read_cache.assert_called_once_with(row, None)
         read_metadata.assert_called_once_with(row, None)
 
 

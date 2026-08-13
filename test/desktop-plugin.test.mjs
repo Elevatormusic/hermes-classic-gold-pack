@@ -219,6 +219,28 @@ test('installDesktopPlugin writes the plug-in and both tracking records', t => {
   assert.equal(entries.at(-1).state, 'committed')
 })
 
+test('installDesktopPlugin returns after the commit marker append fails', t => {
+  const home = temporaryHome()
+  let serializations = 0
+  const nowIso = {
+    toJSON () {
+      serializations += 1
+      if (serializations === 4) throw new Error('commit marker write failed')
+      return '2026-08-13T00:00:00.000Z'
+    }
+  }
+  t.after(() => rmSync(home, { recursive: true, force: true }))
+
+  const result = installDesktopPlugin({ home, nowIso, source: PLUGIN_SOURCE, version: '1.2.0' })
+
+  assert.equal(result.path, desktopPluginPath(home))
+  assert.equal(readStamp(home).applied.desktopPlugin.transactionId, result.transactionId)
+  const entries = readManifest(home).entries.filter(entry => (
+    entry.type === 'desktop-plugin' && entry.transactionId === result.transactionId
+  ))
+  assert.deepEqual(entries.map(entry => entry.state), ['planned', 'installed'])
+})
+
 test('installDesktopPlugin preserves the first pre-existing file', t => {
   const home = temporaryHome()
   t.after(() => rmSync(home, { recursive: true, force: true }))

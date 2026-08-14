@@ -49,6 +49,24 @@ auto-detected checkout when more than one checkout can match.
 
 ## Install
 
+### Easy folder install
+
+For a no-terminal Windows install, download
+`Hermes-Classic-Gold-v1.2.0.zip` from the latest GitHub release. Fully quit
+Hermes, then copy the ZIP's `desktop-plugins` and `plugins` folders into
+`%LOCALAPPDATA%\hermes`. Start Hermes, enable **Classic Gold** in **Settings >
+Plugins**, restart Hermes, and select **Classic Hermes** in **Settings >
+Appearance**.
+
+See [`docs/EASY-INSTALL.md`](docs/EASY-INSTALL.md) for the step-by-step guide.
+Use only the prepared release ZIP. The repository renderer source still needs
+its release build step.
+
+Prefer an AI agent? Copy an install, troubleshooting, update, or safe-removal
+prompt from [`docs/AI-AGENT-PROMPTS.md`](docs/AI-AGENT-PROMPTS.md).
+
+### Managed command install
+
 ```bash
 git clone https://github.com/Elevatormusic/hermes-classic-gold-pack
 cd hermes-classic-gold-pack

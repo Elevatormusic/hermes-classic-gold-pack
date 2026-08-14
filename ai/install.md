@@ -3,6 +3,12 @@
 Install Classic Gold through the supported Hermes Desktop plug-in boundary. Do
 not patch or rebuild the Hermes checkout.
 
+For a user who explicitly wants a no-terminal folder copy, use the prepared
+release ZIP and follow [`../docs/EASY-INSTALL.md`](../docs/EASY-INSTALL.md).
+Copy-ready agent prompts are in
+[`../docs/AI-AGENT-PROMPTS.md`](../docs/AI-AGENT-PROMPTS.md). Do not copy the
+renderer source file directly.
+
 ## Procedure
 
 1. Clone this repository. Read `README.md` and `SECURITY.md`.

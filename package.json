@@ -5,6 +5,7 @@
   "type": "module",
   "bin": { "hermes-classic-gold-pack": "install.mjs" },
   "scripts": {
+    "build-plugin-folder": "node scripts/build-plugin-folder.mjs",
     "diagnostics": "node scripts/diagnostics.mjs",
     "test": "node --test",
     "install-pack": "node install.mjs",

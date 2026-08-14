@@ -27,7 +27,6 @@ import {
 } from '../lib/pack-stamp.mjs'
 import { resolveAgentRepo } from '../lib/agent-repo.mjs'
 import {
-  PLUGIN_BACKEND_FILES,
   pluginBackendRoot,
   pluginConfigState,
   recoverInterruptedPluginBackend,
@@ -602,6 +601,18 @@ async function main() {
   const pluginBackendConfig = applied.pluginBackend
     ? latestForTransaction(manifest.entries, 'plugin-backend-config', (e) => e.id || e.path, backendTransaction)[0]
     : null
+  const activeBackendFileReceipts = backendTransaction
+    ? manifest.entries.filter(entry => (
+      entry.type === 'plugin-backend-file' && entry.state === 'installed' &&
+      entry.transactionId === backendTransaction
+    ))
+    : []
+  const activeBackendConfigReceipts = backendTransaction
+    ? manifest.entries.filter(entry => (
+      entry.type === 'plugin-backend-config' && entry.state === 'installed' &&
+      entry.transactionId === backendTransaction
+    ))
+    : []
 
   const boundaryProblems = []
   const configPath = join(home, 'config.yaml')
@@ -648,20 +659,46 @@ async function main() {
       boundaryProblems.push(`pet config: ${error.message}`)
     }
   }
-  const expectedBackendPaths = PLUGIN_BACKEND_FILES.map(path => join(pluginBackendRoot(home), path))
+  const backendRoot = pluginBackendRoot(home)
+  const stampedBackendFiles = applied.pluginBackend?.files
+  let stampedBackendPathsSafe = Array.isArray(stampedBackendFiles) &&
+    stampedBackendFiles.length > 0 &&
+    stampedBackendFiles.every(path => (
+      typeof path === 'string' && inside(backendRoot, path) && !samePath(path, backendRoot)
+    ))
+  if (stampedBackendPathsSafe) {
+    try {
+      for (const path of stampedBackendFiles) {
+        assertSafeManagedPath(home, path, 'telemetry backend stamped target')
+      }
+    } catch {
+      stampedBackendPathsSafe = false
+    }
+  }
+  const expectedBackendPaths = stampedBackendPathsSafe ? stampedBackendFiles : []
+  const expectedBackendPathKeys = stampedBackendPathsSafe
+    ? expectedBackendPaths.map(pathKey)
+    : []
   if (applied.pluginBackend && (
     !samePath(applied.pluginBackend.path, pluginBackendRoot(home)) ||
     !samePath(applied.pluginBackend.configPath, configPath) ||
-    applied.pluginBackend.transactionId !== backendTransaction ||
-    !Array.isArray(applied.pluginBackend.files) ||
-    applied.pluginBackend.files.length !== expectedBackendPaths.length ||
-    expectedBackendPaths.some(path => !applied.pluginBackend.files.some(stamped => samePath(stamped, path)))
+    typeof backendTransaction !== 'string' || !backendTransaction ||
+    !stampedBackendPathsSafe ||
+    expectedBackendPathKeys.length !== new Set(expectedBackendPathKeys).size
   )) {
-    boundaryProblems.push('telemetry backend: active stamp does not match the expected managed paths')
+    boundaryProblems.push('telemetry backend: active stamp has invalid managed paths')
   }
   if (applied.pluginBackend && (
     pluginBackendFiles.length !== expectedBackendPaths.length ||
-    expectedBackendPaths.some(path => !pluginBackendFiles.some(entry => samePath(entry.path, path)))
+    activeBackendFileReceipts.length !== expectedBackendPaths.length ||
+    pluginBackendFiles.some(entry => entry.state !== 'installed') ||
+    expectedBackendPaths.some(path => !pluginBackendFiles.some(entry => (
+      entry.state === 'installed' && entry.id === 'classic-gold' &&
+      entry.transactionId === backendTransaction && samePath(entry.path, path)
+    ))) ||
+    expectedBackendPaths.some(path => !activeBackendFileReceipts.some(entry => (
+      entry.id === 'classic-gold' && samePath(entry.path, path)
+    )))
   )) {
     boundaryProblems.push('telemetry backend: active stamp and file receipt set do not match')
   }
@@ -670,8 +707,13 @@ async function main() {
     const problem = receiptPathProblem(file, expected, home)
     if (problem) boundaryProblems.push(`telemetry backend: ${problem}`)
   }
-  if (pluginBackendConfig && !samePath(pluginBackendConfig.path, configPath)) {
-    boundaryProblems.push('telemetry backend config: path is outside the selected profile')
+  if (applied.pluginBackend && (!pluginBackendConfig ||
+      activeBackendConfigReceipts.length !== 1 ||
+      pluginBackendConfig.state !== 'installed' ||
+      pluginBackendConfig.id !== 'classic-gold' ||
+      pluginBackendConfig.transactionId !== backendTransaction ||
+      !samePath(pluginBackendConfig.path, configPath))) {
+    boundaryProblems.push('telemetry backend config: active stamp and config receipt do not match')
   }
   if (pluginBackendConfig) {
     try {

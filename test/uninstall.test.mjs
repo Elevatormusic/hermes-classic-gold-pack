@@ -8,7 +8,7 @@ import test from 'node:test'
 
 import { installDesktopPlugin } from '../lib/desktop-plugin.mjs'
 import { installPetConfig } from '../lib/pet-config.mjs'
-import { installPluginBackend, pluginConfigState } from '../lib/plugin-backend.mjs'
+import { installPluginBackend, PLUGIN_BACKEND_FILES, pluginConfigState } from '../lib/plugin-backend.mjs'
 import { gitBlobHash } from '../lib/git-blob.mjs'
 import { appendManifest, readStamp, recordApplied, TIER_SENTINELS } from '../lib/pack-stamp.mjs'
 import { installPets } from '../lib/pets.mjs'
@@ -318,6 +318,63 @@ test('uninstall resumes after one new backend file was already removed', t => {
   const removal = JSON.parse(readFileSync(join(home, 'hermes-classic-gold-pack.manifest.json'), 'utf8'))
     .entries.filter(entry => entry.type === 'uninstall')
   assert.deepEqual(removal.map(entry => entry.state), ['planned', 'installed'])
+})
+
+test('uninstall uses the active stamped backend inventory after the bundle changes', t => {
+  const home = temporaryHome()
+  t.after(() => removeFixture(home))
+  writeFileSync(join(home, 'config.yaml'), 'plugins:\n  enabled: []\n  disabled: []\n')
+  const oldBundleFiles = PLUGIN_BACKEND_FILES.slice(0, -1)
+  const installed = installPluginBackend({
+    home,
+    sourceRoot: BACKEND_SOURCE,
+    files: oldBundleFiles,
+  })
+
+  const result = runUninstall(home)
+
+  assert.equal(result.status, 0, result.stderr || result.stdout)
+  assert.ok(installed.files.every(path => !existsSync(path)))
+  assert.equal(readStamp(home).applied.pluginBackend, undefined)
+})
+
+test('uninstall rejects an outside path in the active backend inventory', t => {
+  const home = temporaryHome()
+  t.after(() => removeFixture(home))
+  writeFileSync(join(home, 'config.yaml'), 'plugins:\n  enabled: []\n  disabled: []\n')
+  const installed = installPluginBackend({ home, sourceRoot: BACKEND_SOURCE })
+  const stampPath = join(home, 'hermes-classic-gold-pack.json')
+  const stamp = JSON.parse(readFileSync(stampPath, 'utf8'))
+  stamp.applied.pluginBackend.files[0] = join(dirname(home), 'outside-backend-file.py')
+  writeFileSync(stampPath, JSON.stringify(stamp, null, 2))
+
+  const result = runUninstall(home)
+
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /active stamp has invalid managed paths/)
+  assert.ok(installed.files.every(path => existsSync(path)))
+  assert.ok(readStamp(home).applied.pluginBackend)
+})
+
+test('uninstall rejects an extra installed backend receipt in the active transaction', t => {
+  const home = temporaryHome()
+  t.after(() => removeFixture(home))
+  writeFileSync(join(home, 'config.yaml'), 'plugins:\n  enabled: []\n  disabled: []\n')
+  const installed = installPluginBackend({ home, sourceRoot: BACKEND_SOURCE })
+  const manifestPath = join(home, 'hermes-classic-gold-pack.manifest.json')
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  const receipt = manifest.entries.find(entry => (
+    entry.type === 'plugin-backend-file' && entry.state === 'installed'
+  ))
+  manifest.entries.push({ ...receipt })
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
+
+  const result = runUninstall(home)
+
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /active stamp and file receipt set do not match/)
+  assert.ok(installed.files.every(path => existsSync(path)))
+  assert.ok(readStamp(home).applied.pluginBackend)
 })
 
 test('uninstall can finish after a pre-existing desktop file was already restored', t => {

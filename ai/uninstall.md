@@ -1,88 +1,94 @@
-# Uninstall — instructions for an AI assistant
+# Uninstall Classic Gold
 
-Help the user remove the **Hermes "Classic Gold" pack**. A user points their AI
-assistant here ("read `ai/uninstall.md`, ask what to remove, follow it").
-
-> **You need shell + file access.** If you can't run commands, give the user the
-> exact steps to run themselves. Confirm before deleting anything.
-
-> **Brief the user first.** For each part they choose, say in one line what you'll
-> do and that it's reversible (e.g. "I'll delete the two pet folders and restore
-> your previous pet from the backup") — then do it and report what changed. Don't
-> make them guess.
-
-## Fastest path — the automated uninstaller
-
-For any normal pack install there's a change manifest, so prefer:
+Use the recorded change manifest and an explicit profile. Preview all changes:
 
 ```bash
-node scripts/uninstall.mjs --dry-run    # preview the plan, change nothing
-node scripts/uninstall.mjs              # do it (asks to confirm; --yes to skip)
+node scripts/uninstall.mjs --dry-run --home "<HERMES_HOME>"
+node scripts/uninstall.mjs --home "<HERMES_HOME>" --yes
+node scripts/uninstall.mjs --home "<HERMES_HOME>" --theme-cleaned --yes
 ```
 
-It reverses the install from the recorded manifest — restoring **your real prior
-theme + mode, pet, and config.yaml** (not a hardcoded default), deleting only pets
-the pack added (keeping any you already had), and rebuilding after restoring source
-files. For safety it auto-restores a source file **only** from a same-version
-`.orig` backup; anything applied by full-copy/reconcile or against a different
-Hermes version is left alone and flagged for `ai/repair.md`. Theme is localStorage,
-so it prints the exact one-line revert snippet to paste. Run
-`node scripts/diagnostics.mjs status` first to see what's currently installed.
+If the current stamp or dry-run plan reports an active legacy source tier, also
+pass the exact Hermes checkout:
 
-The manual steps below are the fallback for older installs that predate the manifest.
-
-## Step 1 — Ask what to remove
-
-Ask the user which parts to uninstall (they may pick more than one):
-
-- **Theme** — the gold colors
-- **Pets** — Noir Neko (both variants)
-- **Status bar** — the advanced TelemetryTape HUD
-- **Caduceus extras** — the advanced backdrop / loader / wordmark
-- **Everything**
-
-Only touch what they choose.
-
-## Step 2 — Remove the chosen parts
-
-### Theme
-Simplest: tell the user to open Hermes → **Appearance** → pick any other theme.
-Or revert instantly in the DevTools console (`Ctrl/Cmd+Shift+I` → Console):
-
-```js
-localStorage.setItem('hermes-desktop-theme-v2','nous');location.reload()
+```bash
+node scripts/uninstall.mjs --dry-run --home "<HERMES_HOME>" --repo "<path-to-hermes-agent>"
 ```
 
-To also delete the stored theme, remove the `hermes-classic-gold` entry from the
-`hermes-desktop-user-themes-v1` localStorage key.
+Ask the user to confirm the dry-run target and plan before the removal command.
+The execution command uses `--yes` only after this review. The uninstaller
+refuses an ambiguous profile instead of using `--yes` to select one.
 
-### Pets
-Find **HERMES_HOME** — the folder that contains `config.yaml` (Windows
-`%LOCALAPPDATA%\hermes`, macOS `~/Library/Application Support/hermes`, Linux
-`~/.local/share/hermes` or `~/.hermes`). Then:
+## What removal can reverse
 
-- Delete the folders `HERMES_HOME/pets/noir-neko` and
-  `HERMES_HOME/pets/noir-neko-ascii-fine`.
-- Do **not** use the in-app "remove" on a pet the desktop already adopted (it
-  errors) — just delete the folder.
-- If one of these was the active pet, restore the previous one: a backup was saved
-  as `HERMES_HOME/config.yaml.bak` when it was activated. Restore that, or edit
-  `config.yaml` → `display.pet.slug` to another installed pet (or set
-  `display.pet.enabled: false`).
-- Delete stale thumbnails: `HERMES_HOME/pets/.thumbs/`.
+The uninstaller:
 
-### Status bar and/or Caduceus extras (advanced)
-The apply scripts saved a backup of every file they touched as `<file>.orig` in
-the `hermes-agent` checkout. To revert:
+- removes or restores the recorded renderer file only when its hash matches the
+  installed receipt;
+- removes or restores the three recorded backend files with the same check;
+- restores only the recorded `classic-gold` membership in `plugins.enabled` and
+  `plugins.disabled` when the current state still matches the install state;
+- removes or restores each current-format pet file only when its live hash
+  matches the receipt;
+- refuses automatic removal for an old directory-only pet receipt because it
+  cannot prove ownership of each file;
+- restores only the recorded `display.pet` block when the user did not change
+  that block after install;
+- restores a prior managed file only after it verifies the backup hash;
+- prints an ownership-checked theme-revert command;
+- restores legacy source files only from safe, same-version `.orig` backups.
 
-1. Restore each touched file — overwrite it with its `.orig` backup
-   (`mv <file>.orig <file>`). The exact files are the ones under
-   `advanced/statusbar/files/…` and `advanced/extras-caduceus/files/…` in this
-   repo (same relative paths inside `hermes-agent`).
-2. Rebuild with Hermes **fully quit**: `cd apps/desktop && npm run pack`.
-3. Relaunch Hermes.
+It does not restore a legacy full `config.yaml` backup because that could erase
+later user settings. It leaves a changed or unproved item in place and keeps its
+stamp for a safe retry. It keeps the append-only manifest as history.
 
-(A Hermes app update also reverts these automatically.)
+For a legacy source file, the uninstaller requires the recorded installed git
+blob. The live file must match that blob, and `.orig` must match the same path
+at current `HEAD`. It leaves an edited, deleted, cross-version, or unproved file
+in place.
 
-## Step 3 — Confirm
-Tell the user exactly what you removed, and that restarting Hermes finalizes it.
+Paste the printed theme-revert command in the Hermes DevTools console. It
+removes the owned Classic Gold mirror only when its stored value still matches
+the ownership snapshot. A run-time install stops when Classic Gold is still
+selected. Select another theme first, then run the printed command again. A
+legacy theme receipt restores only its recorded prior theme and mode. The
+command keeps a later user theme choice. Run the final `--theme-cleaned`
+command only after the renderer command reloads Hermes. This confirmation
+clears the renderer ownership stamp. Then fully quit and start Hermes Desktop
+to unload the Python backend.
+
+## Customizer values
+
+Customizer values are in the plug-in SDK's private, namespaced storage. The
+file uninstaller cannot delete that record. Use **Reset to original** before
+removal if you do not want the custom values to return after a later reinstall.
+Disabling or removing the renderer stops all of its visual effects.
+
+## Remote backend
+
+When the renderer uses a backend on another host, run the same dry-run and
+removal commands on both exact profiles. Remove the local renderer install and
+the remote backend install. Restart the remote Hermes backend or gateway, and
+then fully restart Hermes Desktop.
+
+## Old install with no manifest
+
+Do not use a broad recursive removal. First prove that each exact path belongs
+to this Pack. The known paths are:
+
+```text
+HERMES_HOME/desktop-plugins/classic-gold/plugin.js
+HERMES_HOME/plugins/classic-gold/dashboard/manifest.json
+HERMES_HOME/plugins/classic-gold/dashboard/plugin_api.py
+HERMES_HOME/plugins/classic-gold/dashboard/dist/index.js
+HERMES_HOME/pets/noir-neko/
+HERMES_HOME/pets/noir-neko-ascii-fine/
+```
+
+Remove only the `classic-gold` entry from `plugins.enabled` and
+`plugins.disabled`. Select another theme in **Settings > Appearance**. If a pet
+is active, select another installed pet or disable it in **Settings > Pet**.
+
+Do not delete a full `desktop-plugins`, `plugins`, `pets`, or `HERMES_HOME`
+directory. An old source-patched checkout needs the restore-only procedure in
+[`brokenupdatefix.md`](brokenupdatefix.md), not a blind file copy.

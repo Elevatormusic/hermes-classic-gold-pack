@@ -1,180 +1,183 @@
 #!/usr/bin/env node
-// Seamless update: update Hermes-Agent AND re-apply the Classic Gold pack in one
-// shot, so the app never comes back stock. Hermes rebuilds itself from a git
-// checkout via `git reset --hard`, which discards every source customization, so
-// the pack has to be re-applied after each update. Run THIS instead of the
-// in-app Update button.
-//
-//   node update-hermes.mjs [--repo <path>] [--branch <name>]
-//                          [--no-update] [--no-relaunch]
-//
-//   --repo        hermes-agent checkout (default: %LOCALAPPDATA%/hermes/hermes-agent)
-//   --branch      branch to update to (default: current checkout branch, else main)
-//   --no-update   skip `hermes update` — just re-apply + rebuild (use if you
-//                 already updated via the in-app button and came back stock)
-//   --no-relaunch don't relaunch Hermes when done
-//
-// If anything fails, see ai/brokenupdatefix.md.
-import { execFileSync, spawnSync, spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { resolveHermesHome } from './lib/hermes-home.mjs'
+// Run a normal Hermes update after Classic Gold moves to the desktop plug-in.
+// Runtime plug-ins live outside the Hermes checkout. Hermes updates do not
+// replace them.
+import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { join, posix, win32 } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
 import { resolveAgentRepo } from './lib/agent-repo.mjs'
-import { classifyState } from './lib/pack-stamp.mjs'
-import { selectBaseline } from './lib/baseline.mjs'
-
-const HERE = dirname(fileURLToPath(import.meta.url))
-const isWin = process.platform === 'win32'
-
-function gitHead(repo) {
-  try {
-    return execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-  } catch {
-    return null
-  }
-}
+import { desktopPluginPath } from './lib/desktop-plugin.mjs'
+import { findHermesHomes, resolveHermesHome } from './lib/hermes-home.mjs'
+import { readStamp, TIER_SENTINELS } from './lib/pack-stamp.mjs'
 
 function parseArgs(argv) {
-  const a = { repo: undefined, branch: undefined, update: true, relaunch: true }
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--repo') a.repo = argv[++i]
-    else if (argv[i] === '--branch') a.branch = argv[++i]
-    else if (argv[i] === '--no-update') a.update = false
-    else if (argv[i] === '--no-relaunch') a.relaunch = false
-  }
-  return a
-}
-
-function hermesRunning() {
-  if (!isWin) return null
-  try {
-    return /Hermes\.exe/i.test(execFileSync('tasklist', ['/FI', 'IMAGENAME eq Hermes.exe', '/NH'], { encoding: 'utf8' }))
-  } catch {
-    return null
-  }
-}
-
-function quitHermes() {
-  if (!isWin) return
-  spawnSync('taskkill', ['/F', '/IM', 'Hermes.exe'], { stdio: 'ignore' })
-}
-
-/** Which tiers did a previous install apply? Read the pack stamp; default to
- *  statusbar only (caduceus is opt-in) so we never add a tier the user didn't want. */
-function detectTiers(repo, home) {
-  const set = new Set()
-  try {
-    // Prefer the LIVE source (via classifyState sentinels) — this catches
-    // hand-reconciled installs that never wrote a stamp, so caduceus isn't
-    // silently dropped (issue #3). MUST run BEFORE `hermes update` wipes source.
-    const st = classifyState({ repo, home, base: selectBaseline({ repo }).baseline?.commit ?? null, agentHead: gitHead(repo) })
-    for (const [tier, state] of Object.entries(st.tiers)) {
-      if (state === 'applied' || state === 'diverged') set.add(tier) // edits present now
+  const args = { branch: undefined, help: false, home: undefined, repo: undefined, unsupported: [] }
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]
+    if (argument === '--help' || argument === '-h') {
+      args.help = true
+      continue
     }
-    const a = st.stamp?.applied || {}
-    if (a.statusbar) set.add('statusbar')
-    if (a.caduceus) set.add('caduceus')
-  } catch {
-    // fall through to the safe default
-  }
-  return set.size ? [...set] : ['statusbar']
-}
-
-const TIER_SCRIPT = {
-  statusbar: join(HERE, 'advanced', 'statusbar', 'apply-statusbar.mjs'),
-  caduceus: join(HERE, 'advanced', 'extras-caduceus', 'apply-caduceus.mjs')
-}
-
-function main() {
-  const args = parseArgs(process.argv.slice(2))
-  const repo = resolveAgentRepo({ explicit: args.repo })
-  const desktop = join(repo, 'apps', 'desktop')
-  if (!existsSync(desktop)) {
-    console.error(`✗ Not a hermes-agent checkout: ${repo}\n  Pass --repo <path>.`)
-    return 1
-  }
-
-  // Detect which tiers to re-apply NOW, while the source still has them — after
-  // `hermes update` does its `git reset --hard`, the customizations are gone.
-  const home = resolveHermesHome({})
-  const tiers = detectTiers(repo, home)
-  console.log(`• Installed tiers to re-apply after the update: ${tiers.join(', ')}`)
-
-  // Building needs Hermes fully quit (it locks the packaged app).
-  if (hermesRunning() === true) {
-    console.log('• Quitting Hermes so the rebuild can proceed…')
-    quitHermes()
-  } else if (!isWin) {
-    console.warn('! Make sure Hermes is FULLY quit before continuing (cannot auto-check on this OS).')
-  }
-
-  // 1) update Hermes itself (git reset --hard to the new version + backend).
-  if (args.update) {
-    let branch = args.branch
-    if (!branch) {
-      try {
-        branch = execFileSync('git', ['-C', repo, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' }).trim()
-      } catch {
-        branch = 'main'
+    if (argument === '--branch' || argument === '--home' || argument === '--repo') {
+      const value = argv[index + 1]
+      if (!value || value.startsWith('--')) {
+        args.unsupported.push(`${argument} requires a value`)
+        continue
       }
+      if (argument === '--branch') args.branch = value
+      else if (argument === '--home') args.home = value
+      else args.repo = value
+      index += 1
+      continue
     }
-    const updateArgs = branch && branch !== 'main' ? ['update', '--branch', branch] : ['update']
-    console.log(`• hermes ${updateArgs.join(' ')} …`)
-    const u = spawnSync('hermes', updateArgs, { cwd: repo, stdio: 'inherit', shell: true })
-    if (u.status !== 0) {
-      console.error(
-        '✗ `hermes update` failed (is the `hermes` CLI on PATH?).\n' +
-          '  Update via the in-app button instead, then re-run with --no-update.'
-      )
-      return 1
-    }
-  } else {
-    console.log('• Skipping Hermes update (--no-update) — re-applying the pack to the current checkout.')
+    args.unsupported.push(argument)
   }
+  return args
+}
 
-  // 2) re-apply the tiers detected above (before the update). On a diverged
-  //    checkout the apply scripts reconcile-or-REFUSE (never blind-copy), so a
-  //    refusal here is safe — it means "reconcile via ai/repair.md", not a regress.
-  const newHead = gitHead(repo)
-  const sel = selectBaseline({ repo })
-  if (!sel.baseline) {
-    console.warn(`! Updated Hermes (${newHead ? newHead.slice(0, 7) : '?'}) matches no pack baseline —`)
-    console.warn("  a tier that can't be reconciled cleanly will refuse rather than regress your install.")
-  } else if (newHead && newHead !== sel.baseline.commit) {
-    console.warn(`! Updated Hermes (${newHead.slice(0, 7)}) differs from baseline ${sel.baseline.id} (${sel.baseline.commit.slice(0, 7)}) —`)
-    console.warn("  a tier that can't be reconciled cleanly will refuse rather than regress your install.")
-  }
-  console.log(`• Re-applying tiers: ${tiers.join(', ')}`)
-  for (const tier of tiers) {
-    const r = spawnSync('node', [TIER_SCRIPT[tier], '--repo', repo, '--no-build'], { stdio: 'inherit' })
-    if (r.status !== 0) {
-      console.error(
-        `✗ Re-applying ${tier} failed — likely a version divergence. Reconcile via ai/repair.md, ` +
-          'then re-run with --no-update. (See ai/brokenupdatefix.md.)'
-      )
-      return 1
+const HELP = `Classic Gold guarded Hermes update
+
+Usage: node update-hermes.mjs [--home <path>] [--repo <path>] [--branch <name>]
+
+This command refuses an update while a legacy Classic Gold source patch is
+recorded or present. It does not patch, rebuild, or relaunch Hermes itself.`
+
+function legacyTiers(repo) {
+  const found = []
+  for (const [tier, sentinel] of Object.entries(TIER_SENTINELS)) {
+    try {
+      if (readFileSync(join(repo, sentinel.file), 'utf8').includes(sentinel.marker)) found.push(tier)
+    } catch {
+      // A missing file is not proof of a legacy source patch.
     }
   }
+  return found
+}
 
-  // 3) one rebuild (Hermes is quit).
-  console.log('• Rebuilding (npm run pack)…')
-  const b = spawnSync('npm', ['run', 'pack'], { cwd: desktop, stdio: 'inherit', shell: true })
-  if (b.status !== 0) {
-    console.error('✗ Rebuild failed. See ai/brokenupdatefix.md.')
+function samePath(left, right, platform) {
+  if (!left || !right) return false
+  const paths = platform === 'win32' ? win32 : posix
+  const normalize = value => {
+    const normalized = paths.normalize(paths.resolve(value)).replace(/[\\/]+$/, '')
+    return platform === 'win32' ? normalized.toLowerCase() : normalized
+  }
+  return normalize(left) === normalize(right)
+}
+
+function repoIsAssociated({ args, env, home, platform, repo }) {
+  const paths = platform === 'win32' ? win32 : posix
+  if (samePath(repo, paths.join(home, 'hermes-agent'), platform)) return true
+  if (args.home && args.repo) return true
+  return Boolean(
+    !args.home
+      && !args.repo
+      && env.HERMES_HOME
+      && env.HERMES_AGENT_REPO
+      && samePath(home, env.HERMES_HOME, platform)
+      && samePath(repo, env.HERMES_AGENT_REPO, platform),
+  )
+}
+
+/**
+ * Run the guarded update command.
+ * @param {object} [options]
+ * @param {string[]} [options.argv] command arguments
+ * @param {NodeJS.ProcessEnv} [options.env] environment values
+ * @param {NodeJS.Platform} [options.platform] target platform
+ * @param {(path: string) => boolean} [options.exists] file existence check
+ * @param {typeof spawnSync} [options.spawn] command runner
+ * @param {{log: Function, warn: Function, error: Function}} [options.io] output target
+ * @returns {number} process exit code
+ */
+export function main({
+  argv = process.argv.slice(2),
+  env = process.env,
+  platform = process.platform,
+  exists = existsSync,
+  spawn = spawnSync,
+  io = console,
+} = {}) {
+  const args = parseArgs(argv)
+  if (args.help) {
+    io.log(HELP)
+    return 0
+  }
+  if (args.unsupported.length > 0) {
+    io.error(`✗ Unsupported option: ${args.unsupported.join(', ')}`)
+    io.error('  The old --no-update and --no-relaunch flow was removed. Use --help for the current command.')
+    return 1
+  }
+  if (args.branch && !/^[A-Za-z0-9._/-]+$/.test(args.branch)) {
+    io.error('✗ --branch contains unsupported characters.')
     return 1
   }
 
-  // 4) relaunch.
-  if (args.relaunch && isWin) {
-    const exe = join(desktop, 'release', 'win-unpacked', 'Hermes.exe')
-    if (existsSync(exe)) {
-      console.log('• Relaunching Hermes…')
-      spawn(exe, [], { detached: true, stdio: 'ignore' }).unref()
+  if (!args.home) {
+    const homes = findHermesHomes({ env, platform, exists })
+    if (homes.length > 1) {
+      io.error('✗ More than one Hermes install was found. The update command will not guess.')
+      for (const candidate of homes) io.error(`  - ${candidate}`)
+      io.error('  Re-run with --home <path>. Pass --repo too when the checkout is outside HERMES_HOME.')
+      return 1
     }
   }
-  console.log('✓ Updated Hermes and re-applied Classic Gold. Enjoy.')
+
+  const home = resolveHermesHome({ explicit: args.home, env, platform, exists })
+  if (!home) {
+    io.error('✗ Could not find HERMES_HOME. Pass --home <path>.')
+    return 1
+  }
+
+  const repo = resolveAgentRepo({ explicit: args.repo, home, env, platform, exists })
+  if (!repoIsAssociated({ args, env, home, platform, repo })) {
+    const paths = platform === 'win32' ? win32 : posix
+    io.error(`✗ The selected repository is not associated with HERMES_HOME: ${repo}`)
+    io.error(`  Expected the checkout at: ${paths.join(home, 'hermes-agent')}`)
+    io.error('  For an external checkout, pass both --home <path> and --repo <path>.')
+    return 1
+  }
+
+  if (!exists(join(repo, 'apps', 'desktop'))) {
+    io.error(`✗ Not a hermes-agent checkout: ${repo}`)
+    return 1
+  }
+
+  const legacy = legacyTiers(repo)
+  const stamp = readStamp(home)
+  const recordedLegacy = ['statusbar', 'caduceus'].filter(tier => stamp?.applied?.[tier])
+  const blockedLegacy = [...new Set([...legacy, ...recordedLegacy])]
+  if (blockedLegacy.length > 0) {
+    io.error(`✗ Legacy Classic Gold source patches are still recorded or present: ${blockedLegacy.join(', ')}.`)
+    io.error('  They can conflict with the current Hermes stash-and-restore update flow.')
+    io.error(
+      `  First run: node scripts/migrate-to-plugin.mjs --home ${JSON.stringify(home)} --repo ${JSON.stringify(repo)}`,
+    )
+    io.error('  Then run this update command again.')
+    return 1
+  }
+
+  if (!exists(desktopPluginPath(home))) {
+    io.warn('! The update-safe Classic Gold desktop plug-in was not found for this HERMES_HOME.')
+    io.warn('  Hermes can update, but Classic Gold may not be active afterward.')
+  } else {
+    io.log(`• Classic Gold desktop plug-in: ${desktopPluginPath(home)}`)
+    io.log('  It is outside the Hermes checkout. The updater will not replace it.')
+  }
+
+  const updateArgs = ['update']
+  if (args.branch && args.branch !== 'main') updateArgs.push('--branch', args.branch)
+  io.log(`• hermes ${updateArgs.join(' ')}`)
+  const result = spawn('hermes', updateArgs, { cwd: repo, stdio: 'inherit', shell: true })
+  if (result.status !== 0) {
+    io.error('✗ `hermes update` failed. Classic Gold did not patch or rebuild Hermes.')
+    return result.status || 1
+  }
+
+  io.log('✓ Hermes updated. Classic Gold remains installed as a desktop plug-in.')
   return 0
 }
 
-process.exit(main())
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
+if (isMain) process.exit(main())

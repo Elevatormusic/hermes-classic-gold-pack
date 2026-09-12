@@ -285,16 +285,89 @@ function compactNumber (value) {
   return String(Math.round(number))
 }
 
-function contextPercent (usage) {
-  const maximum = boundedNumber(usage.context_max)
-  if (maximum > 0) return Math.max(0, Math.min(100, (boundedNumber(usage.context_used) / maximum) * 100))
-  return Math.max(0, Math.min(100, boundedNumber(usage.context_percent)))
+/**
+ * Return display values from a sample for the selected session only.
+ * @param {object|null} sample Context sample from the backend.
+ * @param {string|null} sessionId Selected live session ID.
+ * @returns {{label: string, percent: number|null, detail: string}} Display values.
+ */
+export function contextReadout (sample, sessionId) {
+  const sameSession = Boolean(sessionId) && sample?.session_id === sessionId
+  const maximum = sameSession && Number.isSafeInteger(sample.context_max) && sample.context_max > 0
+    ? sample.context_max
+    : null
+  const validSource = (sample?.status === 'anchored' && sample.source === 'active_usage_anchor') ||
+    (sample?.status === 'last_request' && sample.source === 'last_provider_request')
+  const known = maximum && validSource && Number.isSafeInteger(sample.context_used) && sample.context_used > 0
+  if (!known) {
+    return {
+      label: maximum ? `--/${compactNumber(maximum)}` : 'unknown',
+      percent: null,
+      detail: 'Current context is unavailable. Session totals do not measure the context window.'
+    }
+  }
+  const percent = Math.round(sample.context_used / maximum * 100)
+  const last = sample.status === 'last_request'
+  return {
+    label: `${last ? 'last ' : '~'}${compactNumber(sample.context_used)}/${compactNumber(maximum)}`,
+    percent,
+    detail: last
+      ? 'Last provider request and response. Later context growth is not measured.'
+      : 'Provider usage plus estimated new messages in the active context. Advisor usage is excluded.'
+  }
 }
 
-function contextLabel (usage) {
-  const maximum = boundedNumber(usage.context_max)
-  if (maximum > 0) return `${compactNumber(usage.context_used)}/${compactNumber(maximum)}`
-  return `${compactNumber(usage.total)}tok`
+/**
+ * Keep only the latest context response and stop publication after disposal.
+ * @param {object} options Request dependencies.
+ * @param {string} options.sessionId Selected live session ID.
+ * @param {Function} options.request Backend request function.
+ * @param {Function} options.publish Sample receiver.
+ * @returns {{refresh: Function, dispose: Function}} Request controls.
+ */
+export function createContextPoller ({ sessionId, request, publish }) {
+  let live = true
+  let generation = 0
+  return {
+    async refresh () {
+      const ownGeneration = ++generation
+      let sample
+      try {
+        sample = await request(`/context?session_id=${encodeURIComponent(sessionId)}`, { timeoutMs: 3000 })
+      } catch {
+        sample = { status: 'unknown', session_id: sessionId }
+      }
+      if (live && ownGeneration === generation) {
+        publish(sample?.session_id === sessionId ? sample : { status: 'unknown', session_id: sessionId })
+      }
+    },
+    dispose () {
+      live = false
+      generation += 1
+    }
+  }
+}
+
+function useSessionContext (sessionId, gateway, rest) {
+  const [sample, setSample] = useState(null)
+  useEffect(() => {
+    setSample(null)
+    if (!sessionId || gateway !== 'open' || !rest) return
+    const poller = createContextPoller({ sessionId, request: rest, publish: setSample })
+    poller.refresh()
+    const timer = window.setInterval(() => poller.refresh(), 3000)
+    const disposeEvents = host.onEvent('*', event => {
+      if (event.session_id === sessionId && ['message.start', 'message.complete', 'message.error', 'session.info', 'session.usage'].includes(event.type)) {
+        poller.refresh()
+      }
+    })
+    return () => {
+      poller.dispose()
+      window.clearInterval(timer)
+      disposeEvents()
+    }
+  }, [sessionId, gateway, rest])
+  return contextReadout(gateway === 'open' ? sample : null, sessionId)
 }
 
 function contextMeter (percent, width = 8) {
@@ -362,7 +435,7 @@ function formatMemory (resource) {
   return `${formatBytes(resource.used_bytes)}/${formatBytes(resource.total_bytes, 0)}G`
 }
 
-function ContextDetails ({ sessionId }) {
+function ContextDetails ({ sessionId, context }) {
   const [state, setState] = useState({ data: null, loading: Boolean(sessionId) })
 
   useEffect(() => {
@@ -393,10 +466,12 @@ function ContextDetails ({ sessionId }) {
     'data-classic-gold-context-details': '',
     children: [
       jsx('strong', { children: 'Context usage' }),
+      jsx('span', { children: `${context.label}${context.percent === null ? '' : ` · ${context.percent}%`}` }),
+      jsx('span', { className: 'classic-gold-dim', children: context.detail }),
       jsx('span', {
         className: 'classic-gold-dim',
         children: data
-          ? `${compactNumber(data.context_used)}/${compactNumber(data.context_max)} · ${Math.round(data.context_percent)}%`
+          ? 'History categories (estimate; can lag the active context)'
           : state.loading
             ? 'Loading…'
             : sessionId
@@ -1022,18 +1097,14 @@ function TelemetryTape ({ rest, storage }) {
       if (refreshing) return
       refreshing = true
       try {
-        const [usageResult, contextResult, activeResult] = await Promise.allSettled([
+        const [usageResult, activeResult] = await Promise.allSettled([
           activeSessionId ? host.request('session.usage', { session_id: activeSessionId }) : Promise.resolve({}),
-          activeSessionId ? host.request('session.context_breakdown', { session_id: activeSessionId }) : Promise.resolve({}),
           host.request('session.active_list', {})
         ])
         if (cancelled) return
 
         const usage = usageResult.status === 'fulfilled' && usageResult.value && typeof usageResult.value === 'object'
           ? usageResult.value
-          : {}
-        const context = contextResult.status === 'fulfilled' && contextResult.value && typeof contextResult.value === 'object'
-          ? contextResult.value
           : {}
         const sessions = activeResult.status === 'fulfilled' && Array.isArray(activeResult.value?.sessions)
           ? activeResult.value.sessions
@@ -1051,10 +1122,7 @@ function TelemetryTape ({ rest, storage }) {
             ? (sessionStartedAt < 1_000_000_000_000 ? sessionStartedAt * 1000 : sessionStartedAt)
             : current.sessionStartedAt,
           sessionKey: active?.session_key || current.sessionKey,
-          usage: {
-            ...mergeUsageMonotonic(current.usage, usage),
-            ...context
-          },
+          usage: mergeUsageMonotonic(current.usage, usage),
           usageSeeded: current.usageSeeded || usageResult.status === 'fulfilled'
         }))
       } finally {
@@ -1121,12 +1189,13 @@ function TelemetryTape ({ rest, storage }) {
   }, [activeSessionId, runtime.busy])
 
   const source = useMemo(() => providerView(runtime.provider), [runtime.provider])
-  const percent = Math.round(contextPercent(runtime.usage))
+  const context = useSessionContext(activeSessionId, gateway, rest)
+  const percentLabel = context.percent === null ? '--' : `${context.percent}%${context.percent > 100 ? ' over limit' : ''}`
   const detail = [
     `model: ${runtime.model || hostModel || 'model'}`,
     `effort: ${runtime.effort || '-'}`,
     `source: ${source.label}`,
-    `context: ${contextLabel(runtime.usage)} ${percent}%`,
+    `context: ${context.label} ${percentLabel}`,
     `in/out: ${compactNumber(runtime.usage.input)}/${compactNumber(runtime.usage.output)}`
   ].join(' | ')
 
@@ -1217,9 +1286,9 @@ function TelemetryTape ({ rest, storage }) {
             'aria-label': 'Open context breakdown',
             className: 'classic-gold-action classic-gold-context',
             'data-classic-gold-control': 'context',
-            title: 'Open context breakdown',
+            title: context.detail,
             type: 'button',
-            children: [jsx('i', { children: '▣' }), contextLabel(runtime.usage), jsx('em', { children: `[${contextMeter(percent)}]` }), `${String(percent).padStart(2, '0')}%`]
+            children: [jsx('i', { children: '▣' }), context.label, jsx('em', { children: context.percent === null ? '[--------]' : `[${contextMeter(context.percent)}]` }), percentLabel]
           })
         }),
         jsx(DropdownMenuContent, {
@@ -1227,7 +1296,7 @@ function TelemetryTape ({ rest, storage }) {
           className: 'w-64 p-2',
           side: 'top',
           sideOffset: 10,
-          children: jsx(ContextDetails, { sessionId: activeSessionId })
+          children: jsx(ContextDetails, { sessionId: activeSessionId, context })
         })
       ]
     })])

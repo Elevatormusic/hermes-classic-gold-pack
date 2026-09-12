@@ -36,7 +36,11 @@ _NVIDIA_PATHS = (
 
 def _context_usage(session_id: str | None) -> dict[str, Any]:
     """Read context from the selected live agent, without transcript contents."""
-    unknown = {"status": "unknown", "session_id": session_id, "context_max": None}
+    unknown: dict[str, Any] = {
+        "status": "unknown",
+        "session_id": session_id,
+        "context_max": None,
+    }
     # Do not import the gateway: an API read must not start another gateway.
     gateway = sys.modules.get("tui_gateway.server")
     sessions = getattr(gateway, "_sessions", None)
@@ -115,7 +119,14 @@ def _context_usage(session_id: str | None) -> dict[str, Any]:
             "context_used": _token_count(used),
             "context_max": maximum,
         }
-    except (AttributeError, ImportError, KeyError, TypeError, ValueError, OverflowError):
+    except (
+        AttributeError,
+        ImportError,
+        KeyError,
+        TypeError,
+        ValueError,
+        OverflowError,
+    ):
         return unknown
 
 

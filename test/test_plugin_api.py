@@ -162,9 +162,7 @@ class PluginApiTests(unittest.TestCase):
             sys.modules,
             {"tui_gateway.server": gateway, "agent.model_metadata": metadata},
         ):
-            self.assertEqual(
-                self.api._context_usage("ui-a")["context_used"], 300_000
-            )
+            self.assertEqual(self.api._context_usage("ui-a")["context_used"], 300_000)
 
     def test_ram_reports_the_stable_schema(self):
         memory = SimpleNamespace(used=4, available=6, total=10, percent=40.0)

@@ -10,6 +10,7 @@ import math
 import os
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -31,6 +32,110 @@ _NVIDIA_PATHS = (
     / "NVSMI"
     / "nvidia-smi.exe",
 )
+
+
+def _context_usage(session_id: str | None) -> dict[str, Any]:
+    """Read context from the selected live agent, without transcript contents."""
+    unknown: dict[str, Any] = {
+        "status": "unknown",
+        "session_id": session_id,
+        "context_max": None,
+    }
+    # Do not import the gateway: an API read must not start another gateway.
+    gateway = sys.modules.get("tui_gateway.server")
+    sessions = getattr(gateway, "_sessions", None)
+    if not session_id or not isinstance(sessions, dict):
+        return unknown
+    session = sessions.get(session_id)
+    if not isinstance(session, dict):
+        return unknown
+    agent = session.get("agent")
+    comp = getattr(agent, "context_compressor", None)
+    if agent is None or comp is None:
+        return unknown
+    try:
+        maximum = _token_count(getattr(comp, "context_length", 0))
+        if maximum <= 0:
+            return unknown
+        unknown["context_max"] = maximum
+        if (
+            getattr(comp, "awaiting_real_usage_after_compression", False)
+            or getattr(comp, "last_prompt_tokens", 0) < 0
+        ):
+            return unknown
+        agent_session_id = getattr(agent, "session_id", None)
+        model = getattr(agent, "model", None)
+        provider = getattr(agent, "provider", None)
+        anchor = getattr(agent, "_usage_anchor", None)
+        active_messages = getattr(agent, "_session_messages", None)
+        used = None
+        source = None
+        if isinstance(anchor, dict) and isinstance(active_messages, list):
+            from agent.model_metadata import anchored_context_tokens
+
+            used = anchored_context_tokens(list(active_messages), anchor)
+            if used is not None:
+                source = "active_usage_anchor"
+        # Optional compatibility signal. This is aggregator usage, not MoA spend.
+        signal = getattr(agent, "_hermes_context_guard_usage", None)
+        if used is None and isinstance(signal, dict):
+            if (
+                signal.get("schema") == 1
+                and signal.get("session_id") == agent_session_id
+                and signal.get("provider") == provider
+                and signal.get("model") == model
+                and _token_count(signal.get("sequence")) > 0
+                and _token_count(signal.get("context_length")) == maximum
+            ):
+                used = _token_count(signal.get("prompt_tokens")) + _token_count(
+                    signal.get("completion_tokens")
+                )
+                source = "last_provider_request"
+        # Reject a sample if compaction or a model/session change raced this read.
+        if (
+            sessions.get(session_id) is not session
+            or session.get("agent") is not agent
+            or getattr(agent, "session_id", None) != agent_session_id
+            or getattr(agent, "model", None) != model
+            or getattr(agent, "provider", None) != provider
+            or getattr(agent, "context_compressor", None) is not comp
+            or getattr(agent, "_usage_anchor", None) is not anchor
+            or getattr(agent, "_session_messages", None) is not active_messages
+            or getattr(comp, "context_length", 0) != maximum
+            or (
+                source == "last_provider_request"
+                and getattr(agent, "_hermes_context_guard_usage", None) is not signal
+            )
+            or getattr(comp, "awaiting_real_usage_after_compression", False)
+            or getattr(comp, "last_prompt_tokens", 0) < 0
+        ):
+            return unknown
+        if used is None or _token_count(used) <= 0:
+            return unknown
+        return {
+            "status": "anchored" if source == "active_usage_anchor" else "last_request",
+            "source": source,
+            "session_id": session_id,
+            "context_used": _token_count(used),
+            "context_max": maximum,
+        }
+    except (
+        AttributeError,
+        ImportError,
+        KeyError,
+        TypeError,
+        ValueError,
+        OverflowError,
+    ):
+        return unknown
+
+
+@router.get("/context")
+def context_usage(
+    session_id: str | None = Query(default=None, max_length=256),
+) -> dict[str, Any]:
+    """Return a context sample for an exact live UI session ID."""
+    return _context_usage(session_id)
 
 
 def _ram() -> dict[str, Any]:

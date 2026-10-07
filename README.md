@@ -256,6 +256,20 @@ or Contrast; change
 density and size; hide the caduceus or wordmark; and control the duplicate
 composer model selector.
 
+The context gauge uses the selected agent's active request history. A `~`
+marks provider usage plus an estimate of new messages. `last` marks the last
+provider request and response when newer context cannot be measured. `unknown`
+or `--` means no valid sample is available, including during compaction. MoA
+advisor usage and lifetime token totals do not enter this gauge. A measured
+value above the limit shows its full percentage and **over limit**.
+
+Install the renderer and telemetry backend together, then reload the plug-in
+and backend when the active work has stopped. Older backends without the
+context endpoint show `unknown`. The endpoint reads only the exact live UI
+session. If the loaded gateway or active usage anchor is unavailable, it does
+not substitute stored history or token totals. The category list in the
+context menu is a separate history estimate and can lag the active request.
+
 Hermes keeps these values in the plug-in SDK's namespaced storage. They remain
 after a restart and after a Pack reinstall. **Reset to original** removes the
 custom effects and stores the default values. The file uninstaller removes the

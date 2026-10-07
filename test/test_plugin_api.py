@@ -40,6 +40,130 @@ class PluginApiTests(unittest.TestCase):
     def setUp(self):
         self.api = _load_plugin_api()
 
+    def context_fixture(self):
+        """Create separate gateway and active histories for one live agent."""
+        messages = [{"role": "user", "content": "active"}]
+        anchor = {"prompt_tokens": 120_000, "completion_tokens": 500}
+        comp = SimpleNamespace(context_length=262_144, last_prompt_tokens=513_000)
+        agent = SimpleNamespace(
+            session_id="stored-a",
+            model="default",
+            provider="moa",
+            context_compressor=comp,
+            _usage_anchor=anchor,
+            _session_messages=messages,
+        )
+        gateway = types.ModuleType("tui_gateway.server")
+        gateway._sessions = {
+            "ui-a": {
+                "agent": agent,
+                "history": [{"role": "user", "content": "old"}],
+            }
+        }
+        metadata = types.ModuleType("agent.model_metadata")
+        metadata.anchored_context_tokens = Mock(return_value=120_500)
+        return agent, gateway, metadata
+
+    def test_context_uses_the_active_anchor_not_combined_usage_or_gateway_history(self):
+        agent, gateway, metadata = self.context_fixture()
+        with patch.dict(
+            sys.modules,
+            {"tui_gateway.server": gateway, "agent.model_metadata": metadata},
+        ):
+            result = self.api._context_usage("ui-a")
+        self.assertEqual(result["context_used"], 120_500)
+        self.assertEqual(result["status"], "anchored")
+        metadata.anchored_context_tokens.assert_called_once_with(
+            agent._session_messages, agent._usage_anchor
+        )
+        self.assertNotIn("history", result)
+
+    def test_context_does_not_use_another_session_or_stored_id(self):
+        _, gateway, metadata = self.context_fixture()
+        with patch.dict(
+            sys.modules,
+            {"tui_gateway.server": gateway, "agent.model_metadata": metadata},
+        ):
+            for session_id in (None, "ui-b", "stored-a"):
+                self.assertEqual(
+                    self.api._context_usage(session_id)["status"], "unknown"
+                )
+        metadata.anchored_context_tokens.assert_not_called()
+
+    def test_context_is_unknown_during_compaction_and_without_an_anchor(self):
+        agent, gateway, metadata = self.context_fixture()
+        with patch.dict(
+            sys.modules,
+            {"tui_gateway.server": gateway, "agent.model_metadata": metadata},
+        ):
+            agent.context_compressor.awaiting_real_usage_after_compression = True
+            self.assertEqual(self.api._context_usage("ui-a")["status"], "unknown")
+            agent.context_compressor.awaiting_real_usage_after_compression = False
+            agent.context_compressor.last_prompt_tokens = -1
+            self.assertEqual(self.api._context_usage("ui-a")["status"], "unknown")
+            agent.context_compressor.last_prompt_tokens = 513_000
+            agent._usage_anchor = None
+            self.assertEqual(self.api._context_usage("ui-a")["status"], "unknown")
+        metadata.anchored_context_tokens.assert_not_called()
+
+    def test_context_rejects_a_read_that_races_compaction(self):
+        agent, gateway, metadata = self.context_fixture()
+
+        def compress(*_args):
+            agent._usage_anchor = None
+            return 120_500
+
+        metadata.anchored_context_tokens.side_effect = compress
+        with patch.dict(
+            sys.modules,
+            {"tui_gateway.server": gateway, "agent.model_metadata": metadata},
+        ):
+            self.assertEqual(self.api._context_usage("ui-a")["status"], "unknown")
+
+    def test_context_fallback_is_labelled_and_validates_signal_identity(self):
+        agent, gateway, metadata = self.context_fixture()
+        agent._usage_anchor = None
+        signal = {
+            "schema": 1,
+            "session_id": "stored-a",
+            "provider": "moa",
+            "model": "default",
+            "sequence": 1,
+            "context_length": 262_144,
+            "prompt_tokens": 259_285,
+            "completion_tokens": 128,
+            "cache_read_tokens": 253_440,
+        }
+        agent._hermes_context_guard_usage = signal
+        with patch.dict(
+            sys.modules,
+            {"tui_gateway.server": gateway, "agent.model_metadata": metadata},
+        ):
+            result = self.api._context_usage("ui-a")
+            self.assertEqual(result["context_used"], 259_413)
+            self.assertEqual(result["status"], "last_request")
+            for key, value in (
+                ("session_id", "stored-b"),
+                ("provider", "other"),
+                ("model", "other"),
+                ("sequence", 0),
+                ("context_length", 128_000),
+            ):
+                with self.subTest(key=key):
+                    agent._hermes_context_guard_usage = {**signal, key: value}
+                    self.assertEqual(
+                        self.api._context_usage("ui-a")["status"], "unknown"
+                    )
+
+    def test_context_preserves_a_real_over_limit_value(self):
+        _, gateway, metadata = self.context_fixture()
+        metadata.anchored_context_tokens.return_value = 300_000
+        with patch.dict(
+            sys.modules,
+            {"tui_gateway.server": gateway, "agent.model_metadata": metadata},
+        ):
+            self.assertEqual(self.api._context_usage("ui-a")["context_used"], 300_000)
+
     def test_ram_reports_the_stable_schema(self):
         memory = SimpleNamespace(used=4, available=6, total=10, percent=40.0)
         with patch.object(self.api.psutil, "virtual_memory", return_value=memory):
